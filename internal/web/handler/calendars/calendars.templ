@@ -1,0 +1,186 @@
+package calendars
+
+import (
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/repo"
+	"github.com/FyrmForge/huginn/internal/web/components"
+	"github.com/FyrmForge/huginn/internal/web/components/form"
+)
+
+templ calendarsPage(c echo.Context, cals []*repo.Calendar, userID string) {
+	@components.AppLayout(c, "Calendars") {
+		<div class="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-8">
+
+			<!-- Owned calendars -->
+			<section>
+				<div class="flex items-center justify-between mb-3">
+					<h2 class="text-[10px] font-medium uppercase tracking-widest text-huginn-mute">my calendars</h2>
+					<a href="/calendars/new" class="btn-primary">+ new</a>
+				</div>
+				<div class="flex flex-col gap-1">
+					for _, cal := range cals {
+						if cal.OwnerID == userID {
+							<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+								<span class="w-3 h-3 rounded-full shrink-0" style={ "background-color: " + cal.Color }></span>
+								<span class="text-xs text-huginn-fg flex-1">{ cal.Name }</span>
+								if cal.IsDefault {
+									<span class="chip">default</span>
+								}
+								<a href={ templ.URL("/calendars/" + cal.ID + "/edit") } class="btn-ghost text-huginn-mute">edit</a>
+								if !cal.IsDefault {
+									<a href={ templ.URL("/calendars/" + cal.ID + "/confirm-delete") } class="btn-ghost text-huginn-danger">delete</a>
+								}
+							</div>
+						}
+					}
+				</div>
+			</section>
+
+			<!-- Shared with me -->
+			<section>
+				<h2 class="text-[10px] font-medium uppercase tracking-widest text-huginn-mute mb-3">shared with me</h2>
+				<div class="flex flex-col gap-1">
+					for _, cal := range cals {
+						if cal.OwnerID != userID {
+							<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+								<span class="w-3 h-3 rounded-full shrink-0" style={ "background-color: " + cal.Color }></span>
+								<span class="text-xs text-huginn-fg flex-1">{ cal.Name }</span>
+								<form method="POST" action={ templ.URL("/calendars/" + cal.ID + "/leave") } class="inline">
+									@form.CSRFField(c)
+									<button type="submit" class="btn-ghost text-huginn-mute">leave</button>
+								</form>
+							</div>
+						}
+					}
+				</div>
+			</section>
+
+		</div>
+	}
+}
+
+templ calendarFormPage(c echo.Context, f CalendarForm, errors map[string]string, members []*repo.CalendarMemberInfo, calID string) {
+	@components.AppLayout(c, "Calendar") {
+		<div class="max-w-lg mx-auto px-4 py-6 flex flex-col gap-8">
+			<section>
+				<h1 class="text-sm font-medium text-huginn-fg uppercase tracking-wider mb-4">
+					if calID == "" {
+						new calendar
+					} else {
+						edit calendar
+					}
+				</h1>
+				@calendarForm(c, f, errors, calID)
+			</section>
+
+			if calID != "" && members != nil {
+				<section>
+					<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">sharing</h2>
+
+					<!-- Add member form -->
+					<form method="POST" action={ templ.URL("/calendars/" + calID + "/share") } class="flex gap-2 mb-4">
+						@form.CSRFField(c)
+						<input type="email" name="email" class="input flex-1" placeholder="user@example.com" required/>
+						<select name="role" class="input w-28">
+							<option value="viewer">viewer</option>
+							<option value="editor">editor</option>
+						</select>
+						<button type="submit" class="btn-primary">share</button>
+					</form>
+
+					<!-- Current members -->
+					if len(members) == 0 {
+						<p class="text-xs text-huginn-mute">No one else has access yet.</p>
+					} else {
+						<div class="flex flex-col gap-1">
+							for _, m := range members {
+								<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+									@components.UserAvatar(&repo.User{Name: m.Name, AvatarURL: m.AvatarURL, Email: m.Email})
+									<div class="flex-1 min-w-0">
+										<span class="text-xs text-huginn-fg">{ m.Email }</span>
+										if m.Name != "" && m.Name != m.Email {
+											<span class="text-xs text-huginn-mute ml-2">{ m.Name }</span>
+										}
+									</div>
+									<span class="chip text-huginn-mute">{ m.Role }</span>
+									<form method="POST" action={ templ.URL("/calendars/" + calID + "/members/" + m.UserID + "/remove") } class="inline">
+										@form.CSRFField(c)
+										<button type="submit" class="btn-ghost text-huginn-danger">remove</button>
+									</form>
+								</div>
+							}
+						</div>
+					}
+				</section>
+			}
+		</div>
+	}
+}
+
+templ calendarConfirmDeletePage(c echo.Context, cal *repo.Calendar) {
+	@components.AppLayout(c, "Delete Calendar") {
+		<div class="max-w-sm mx-auto px-4 py-6">
+			<h1 class="text-sm font-medium text-huginn-fg uppercase tracking-wider mb-4">delete calendar</h1>
+			<p class="text-xs text-huginn-dim mb-6">
+				delete <span class="text-huginn-fg font-medium">{ cal.Name }</span> and all its events? this can't be undone.
+			</p>
+			<div class="flex gap-2">
+				<a href="/calendars" class="btn">cancel</a>
+				<form method="POST" action={ templ.URL("/calendars/" + cal.ID + "/delete") }>
+					@form.CSRFField(c)
+					<button type="submit" class="btn-danger">delete</button>
+				</form>
+			</div>
+		</div>
+	}
+}
+
+templ calendarForm(c echo.Context, f CalendarForm, errors map[string]string, calID string) {
+	if calID == "" {
+		<form id="cal-form" hx-post="/calendars" hx-target="#cal-form" hx-swap="outerHTML" method="POST" action="/calendars" class="flex flex-col gap-4">
+			@form.CSRFField(c)
+			@calendarFields(f, errors)
+			<div class="flex gap-2">
+				<a href="/calendars" class="btn">cancel</a>
+				<button type="submit" class="btn-primary">create</button>
+			</div>
+		</form>
+	} else {
+		<form id="cal-form" hx-post={ "/calendars/" + calID } hx-target="#cal-form" hx-swap="outerHTML" method="POST" class="flex flex-col gap-4">
+			@form.CSRFField(c)
+			@calendarFields(f, errors)
+			<div class="flex gap-2">
+				<a href="/calendars" class="btn">cancel</a>
+				<button type="submit" class="btn-primary">save</button>
+			</div>
+		</form>
+	}
+}
+
+templ calendarFields(f CalendarForm, errors map[string]string) {
+	if form.GetError(errors, "general") != "" {
+		<div class="px-3 py-2 text-xs border alert-error">{ form.GetError(errors, "general") }</div>
+	}
+	<div>
+		<label class="block text-xs text-huginn-dim mb-1">name</label>
+		<input type="text" name="name" value={ f.Name } class="input" autofocus/>
+		@form.FieldError("name", form.GetError(errors, "name"))
+	</div>
+	<div>
+		<label class="block text-xs text-huginn-dim mb-1">description</label>
+		<input type="text" name="description" value={ f.Description } class="input" placeholder="Optional"/>
+	</div>
+	<div class="flex gap-4">
+		<div class="flex-1">
+			<label class="block text-xs text-huginn-dim mb-1">color</label>
+			<input type="color" name="color" value={ f.Color } class="h-8 w-full cursor-pointer bg-huginn-panel border border-huginn-line"/>
+			@form.FieldError("color", form.GetError(errors, "color"))
+		</div>
+		<div class="flex-1">
+			<label class="block text-xs text-huginn-dim mb-1">timezone</label>
+			<input type="text" name="timezone" value={ f.Timezone } class="input" placeholder="UTC" list="tz-list" autocomplete="off"/>
+			@form.TimezoneDatalist()
+			@form.FieldError("timezone", form.GetError(errors, "timezone"))
+		</div>
+	</div>
+}

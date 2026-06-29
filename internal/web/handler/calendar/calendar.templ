@@ -1,0 +1,311 @@
+package calendar
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/repo"
+	"github.com/FyrmForge/huginn/internal/service"
+	"github.com/FyrmForge/huginn/internal/web/components"
+)
+
+var weekdays = []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+
+templ monthPage(c echo.Context, d monthViewData) {
+	@components.AppLayout(c, d.Month.String() + " " + fmt.Sprint(d.Year)) {
+		<div class="flex h-full">
+			@calendarSidebar(c, d.Calendars)
+			<div class="flex-1 flex flex-col min-w-0">
+				@monthGrid(d.Grid, d.Year, d.Month)
+			</div>
+		</div>
+	}
+}
+
+templ calendarSidebar(c echo.Context, calendars []*repo.Calendar) {
+	@templ.Raw("<style>" + calendarColorCSS(calendars) + "</style>")
+	<aside class="w-48 shrink-0 border-r border-huginn-line bg-huginn-surface flex flex-col">
+		<div class="p-3 border-b border-huginn-line flex items-center justify-between">
+			<span class="text-[10px] uppercase tracking-widest text-huginn-mute">calendars</span>
+			<a href="/calendars/new" class="btn-ghost text-huginn-accent" title="New calendar">+</a>
+		</div>
+		<div class="flex-1 overflow-y-auto py-2">
+			for _, cal := range calendars {
+				<label class="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-huginn-panel group">
+					<input
+						type="checkbox"
+						checked
+						data-cal-toggle={ cal.ID }
+						class="sr-only"
+					/>
+					<span
+						class="w-2.5 h-2.5 rounded-full shrink-0 transition-opacity"
+						style={ "background-color: " + cal.Color }
+					></span>
+					<span class="text-xs text-huginn-fg truncate flex-1">{ cal.Name }</span>
+					if u := components.GetUser(c); u != nil && cal.OwnerID != u.ID {
+						<span class="text-[9px] text-huginn-mute shrink-0">shared</span>
+					}
+				</label>
+			}
+		</div>
+		<div class="p-3 border-t border-huginn-line">
+			<a href="/calendars" class="btn-ghost w-full justify-center text-huginn-mute">manage</a>
+		</div>
+	</aside>
+}
+
+templ monthGrid(grid []MonthDay, year int, month time.Month) {
+	<div id="cal-grid" class="flex flex-col flex-1 min-h-0">
+		<!-- Header: nav + month label -->
+		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
+			<div class="flex items-center gap-2">
+				<a
+					href={ templ.URL(prevMonthURL(year, month)) }
+					hx-get={ prevMonthURL(year, month) }
+					hx-target="#cal-grid"
+					hx-swap="outerHTML"
+					class="btn-ghost"
+				>‹</a>
+				<span class="text-xs font-medium text-huginn-fg w-32 text-center">
+					{ month.String() } { fmt.Sprint(year) }
+				</span>
+				<a
+					href={ templ.URL(nextMonthURL(year, month)) }
+					hx-get={ nextMonthURL(year, month) }
+					hx-target="#cal-grid"
+					hx-swap="outerHTML"
+					class="btn-ghost"
+				>›</a>
+			</div>
+			<div class="flex items-center gap-1">
+				<a href="/" class="chip">month</a>
+				<a href="/week" class="btn-ghost">week</a>
+				<button
+					class="btn-primary ml-2"
+					hx-get="/events/new"
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>+ event</button>
+			</div>
+		</div>
+		<!-- Day-of-week header -->
+		<div class="grid grid-cols-7 border-b border-huginn-line shrink-0">
+			for _, wd := range weekdays {
+				<div class="px-2 py-1 text-[10px] uppercase tracking-widest text-huginn-mute text-center">
+					{ wd }
+				</div>
+			}
+		</div>
+		<!-- Days grid -->
+		<div class="grid grid-cols-7 flex-1 min-h-0 overflow-y-auto">
+			for _, day := range grid {
+				@monthCell(day)
+			}
+		</div>
+	</div>
+	<!-- Modal root for event create/edit -->
+	<div id="modal-root"></div>
+	<!-- Refresh grid when an event is saved/deleted. -->
+	<div
+		id="cal-refresh-listener"
+		hx-get={ fmt.Sprintf("/calendar/grid?year=%d&month=%d", year, int(month)) }
+		hx-target="#cal-grid"
+		hx-swap="outerHTML"
+		hx-trigger="huginn:refresh-calendar from:body"
+	></div>
+}
+
+templ monthCell(day MonthDay) {
+	<div
+		class={
+			"border-b border-r border-huginn-line p-1 min-h-0 flex flex-col cursor-pointer group",
+			templ.KV("bg-huginn-panel/30", day.OtherMonth),
+			templ.KV("bg-huginn-accent/5", day.IsToday),
+		}
+		hx-get={ fmt.Sprintf("/events/new?date=%s", day.Date.Format("2006-01-02")) }
+		hx-target="#modal-root"
+		hx-swap="innerHTML"
+	>
+		<span
+			class={
+				"text-[10px] self-end px-1 rounded-full mb-0.5",
+				templ.KV("text-huginn-mute", day.OtherMonth && !day.IsToday),
+				templ.KV("text-huginn-fg", !day.OtherMonth && !day.IsToday),
+				templ.KV("bg-huginn-accent text-huginn-bg font-semibold", day.IsToday),
+			}
+		>{ fmt.Sprint(day.Date.Day()) }</span>
+		<div class="flex flex-col gap-0.5 overflow-hidden">
+			for _, o := range day.Events {
+				@occurrenceChip(o)
+			}
+		</div>
+	</div>
+}
+
+templ occurrenceChip(o service.Occurrence) {
+	<button
+		class="w-full text-left text-[10px] px-1.5 py-0.5 rounded-sm truncate transition-colors"
+		data-event-cal={ o.CalendarID() }
+		hx-get={ occurrenceEditURL(o) }
+		hx-target="#modal-root"
+		hx-swap="innerHTML"
+		hx-trigger="click consume"
+	>{ o.Title }</button>
+}
+
+templ weekPage(c echo.Context, d weekViewData) {
+	@components.AppLayout(c, "Week of "+d.WeekStart.Format("Jan 2")) {
+		<div class="flex h-full">
+			@calendarSidebar(c, d.Calendars)
+			<div class="flex-1 flex flex-col min-w-0">
+				@weekGrid(d.Days, d.WeekStart)
+			</div>
+		</div>
+	}
+}
+
+templ weekGrid(days []WeekDay, weekStart time.Time) {
+	<div id="week-grid" class="flex flex-col flex-1 min-h-0">
+		<!-- Header: nav + view switcher -->
+		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
+			<div class="flex items-center gap-2">
+				<a
+					href={ templ.URL(prevWeekURL(weekStart)) }
+					hx-get={ prevWeekURL(weekStart) }
+					hx-target="#week-grid"
+					hx-swap="outerHTML"
+					class="btn-ghost"
+				>‹</a>
+				<span class="text-xs font-medium text-huginn-fg w-48 text-center">
+					{ weekStart.Format("Jan 2") } – { weekStart.AddDate(0, 0, 6).Format("Jan 2, 2006") }
+				</span>
+				<a
+					href={ templ.URL(nextWeekURL(weekStart)) }
+					hx-get={ nextWeekURL(weekStart) }
+					hx-target="#week-grid"
+					hx-swap="outerHTML"
+					class="btn-ghost"
+				>›</a>
+			</div>
+			<div class="flex items-center gap-1">
+				<a href="/" class="btn-ghost">month</a>
+				<a href="/week" class="chip">week</a>
+				<button
+					class="btn-primary ml-2"
+					hx-get="/events/new"
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>+ event</button>
+			</div>
+		</div>
+		<!-- Day header row -->
+		<div class="flex shrink-0 border-b border-huginn-line">
+			<div class="w-12 shrink-0"></div>
+			for _, day := range days {
+				<div class={
+					"flex-1 text-center py-1 border-l border-huginn-line/50",
+					templ.KV("text-huginn-accent", day.IsToday),
+					templ.KV("text-huginn-mute", !day.IsToday),
+				}>
+					<div class="text-[10px] uppercase tracking-widest">{ day.Date.Format("Mon") }</div>
+					<div class={
+						"text-sm mx-auto w-6 h-6 flex items-center justify-center rounded-full",
+						templ.KV("bg-huginn-accent text-huginn-bg font-semibold", day.IsToday),
+					}>{ fmt.Sprint(day.Date.Day()) }</div>
+				</div>
+			}
+		</div>
+		<!-- All-day row (only when there are all-day events) -->
+		if hasAllDay(days) {
+			<div class="flex shrink-0 border-b border-huginn-line">
+				<div class="w-12 shrink-0 flex items-center justify-end pr-2">
+					<span class="text-[9px] text-huginn-mute">all day</span>
+				</div>
+				for _, day := range days {
+					<div class="flex-1 border-l border-huginn-line/50 px-0.5 py-0.5 min-h-5">
+						for _, o := range day.AllDay {
+							<div
+								data-event-cal={ o.CalendarID() }
+								class="text-[10px] px-1 rounded-sm truncate mb-0.5 cursor-pointer"
+								hx-get={ occurrenceEditURL(o) }
+								hx-target="#modal-root"
+								hx-swap="innerHTML"
+							>{ o.Title }</div>
+						}
+					</div>
+				}
+			</div>
+		}
+		<!-- Scrollable time grid -->
+		<div class="flex flex-1 overflow-y-auto" id="week-time-grid">
+			<!-- Hour labels -->
+			<div class="w-12 shrink-0 relative" style="height: 1440px;">
+				for _, hr := range weekHours() {
+					if hr > 0 {
+						<div
+							style={ fmt.Sprintf("position: absolute; top: %dpx; right: 6px;", hr*60) }
+							class="text-[9px] text-huginn-mute leading-none -translate-y-2"
+						>{ fmt.Sprintf("%02d:00", hr) }</div>
+					}
+				}
+			</div>
+			<!-- Day columns -->
+			for _, day := range days {
+				<div class="flex-1 border-l border-huginn-line/50 relative" style="height: 1440px;">
+					for _, hr := range weekHours() {
+						<div
+							style={ fmt.Sprintf("position: absolute; top: %dpx; left: 0; right: 0;", hr*60) }
+							class="border-t border-huginn-line/30"
+						></div>
+					}
+					for _, we := range day.Timed {
+						<button
+							data-event-cal={ we.Occ.CalendarID() }
+							style={ fmt.Sprintf("position: absolute; top: %dpx; height: %dpx; left: 2px; right: 2px;", we.TopPx, we.HeightPx) }
+							class="w-full text-left text-[10px] px-1.5 py-0.5 rounded-sm overflow-hidden transition-colors"
+							hx-get={ occurrenceEditURL(we.Occ) }
+							hx-target="#modal-root"
+							hx-swap="innerHTML"
+							hx-trigger="click consume"
+						>{ we.Occ.Title }</button>
+					}
+				</div>
+			}
+		</div>
+		<div id="modal-root"></div>
+	</div>
+}
+
+func prevMonthURL(year int, month time.Month) string {
+	t := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0)
+	return fmt.Sprintf("/calendar/grid?year=%d&month=%d", t.Year(), int(t.Month()))
+}
+
+func nextMonthURL(year int, month time.Month) string {
+	t := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, 0)
+	return fmt.Sprintf("/calendar/grid?year=%d&month=%d", t.Year(), int(t.Month()))
+}
+
+// occurrenceEditURL builds the edit URL for an occurrence.
+// For recurring occurrences, includes the recurrence_id so the handler can show the scope picker.
+func occurrenceEditURL(o service.Occurrence) string {
+	base := fmt.Sprintf("/events/%s/edit", o.EventID())
+	if o.IsRecurring() {
+		return base + fmt.Sprintf("?rid=%s", o.RecurrenceID.UTC().Format(time.RFC3339))
+	}
+	return base
+}
+
+// calendarColorCSS emits CSS that maps each [data-event-cal] to the calendar's hex color.
+func calendarColorCSS(calendars []*repo.Calendar) string {
+	var sb strings.Builder
+	for _, cal := range calendars {
+		c := cal.Color
+		fmt.Fprintf(&sb, `[data-event-cal="%s"]{background-color:%s26;color:%s}`, cal.ID, c, c)
+		fmt.Fprintf(&sb, `[data-event-cal="%s"]:hover{background-color:%s40}`, cal.ID, c)
+	}
+	return sb.String()
+}

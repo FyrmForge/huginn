@@ -1,0 +1,70 @@
+package admin
+
+import (
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/web/components"
+	"github.com/FyrmForge/huginn/internal/web/components/form"
+)
+
+templ adminPage(c echo.Context, d pageData) {
+	@components.AppLayout(c, "Admin") {
+		<div class="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-10">
+
+			<!-- Stats -->
+			<section>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-4">overview</h2>
+				<div class="grid grid-cols-3 gap-3">
+					@statCard("users", d.Stats.TotalUsers)
+					@statCard("admins", d.Stats.AdminUsers)
+					@statCard("calendars", d.Stats.TotalCalendars)
+					@statCard("events", d.Stats.TotalEvents)
+					@statCard("connections", d.Stats.TotalConnections)
+					@statCard("active devices", d.Stats.TotalDevices)
+				</div>
+			</section>
+
+			<!-- Users -->
+			<section>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">users</h2>
+				<div class="flex flex-col gap-1">
+					for _, u := range d.Users {
+						<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+							<div class="flex-1 min-w-0">
+								<div class="flex items-center gap-2">
+									@components.UserAvatar(u)
+									<span class="text-xs text-huginn-fg truncate">{ u.Email }</span>
+									if u.Name != "" && u.Name != u.Email {
+										<span class="text-xs text-huginn-mute truncate">{ u.Name }</span>
+									}
+								</div>
+							</div>
+							<span class="text-[10px] text-huginn-mute shrink-0">{ fmtTime(u.CreatedAt) }</span>
+							<span class={ "chip shrink-0 " + roleClass(u.Role) }>{ u.Role }</span>
+							<form method="POST" action={ templ.URL("/admin/users/" + u.ID + "/role") } class="inline flex items-center gap-1 shrink-0">
+								@form.CSRFField(c)
+								if u.Role == "admin" {
+									<input type="hidden" name="role" value="user"/>
+									<button type="submit" class="btn-ghost text-huginn-mute text-[10px]">demote</button>
+								} else {
+									<input type="hidden" name="role" value="admin"/>
+									<button type="submit" class="btn-ghost text-huginn-accent text-[10px]">promote</button>
+								}
+							</form>
+						</div>
+					}
+				</div>
+			</section>
+
+		</div>
+	}
+}
+
+templ statCard(label string, n int) {
+	<div class="px-4 py-3 bg-huginn-surface border border-huginn-line flex flex-col gap-1">
+		<span class="text-2xl font-semibold text-huginn-fg">{ strconv.Itoa(n) }</span>
+		<span class="text-[10px] uppercase tracking-widest text-huginn-mute">{ label }</span>
+	</div>
+}
+

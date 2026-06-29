@@ -1,0 +1,32 @@
+package components
+
+import (
+	"strings"
+
+	"github.com/FyrmForge/huginn/internal/repo"
+)
+
+templ UserAvatar(u *repo.User) {
+	if u.AvatarURL != "" {
+		<img src={ u.AvatarURL } class="w-5 h-5 rounded-full object-cover" alt="avatar"/>
+	} else {
+		<span class="w-5 h-5 rounded-full bg-huginn-accent/20 text-huginn-accent text-[9px] font-semibold flex items-center justify-center shrink-0">
+			{ userInitials(u) }
+		</span>
+	}
+}
+
+func userInitials(u *repo.User) string {
+	name := u.Name
+	if name == "" {
+		name = u.Email
+	}
+	parts := strings.Fields(name)
+	if len(parts) == 0 {
+		return "?"
+	}
+	if len(parts) == 1 {
+		return strings.ToUpper(string([]rune(parts[0])[0:1]))
+	}
+	return strings.ToUpper(string([]rune(parts[0])[0:1])) + strings.ToUpper(string([]rune(parts[len(parts)-1])[0:1]))
+}

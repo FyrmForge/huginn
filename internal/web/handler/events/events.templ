@@ -1,0 +1,473 @@
+package events
+
+import (
+	"fmt"
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/repo"
+	"github.com/FyrmForge/huginn/internal/web/components/form"
+)
+
+templ eventModal(c echo.Context, f EventForm, calendars []*repo.Calendar, errors map[string]string, eventID string, rid string, scope string) {
+	<div
+		id="modal-backdrop"
+		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
+		hx-on:click="if(event.target===this) htmx.ajax('GET','/events/close',{target:'#modal-root',swap:'innerHTML'})"
+	>
+		<div class="bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col max-h-[90vh] overflow-y-auto">
+			<div class="flex items-center justify-between px-4 py-3 border-b border-huginn-line sticky top-0 bg-huginn-surface">
+				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">
+					if eventID == "" {
+						new event
+					} else {
+						edit event
+					}
+				</span>
+				<button
+					class="btn-ghost text-huginn-mute"
+					hx-get="/events/close"
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>×</button>
+			</div>
+			@eventForm(c, f, calendars, errors, eventID, rid, scope)
+		</div>
+	</div>
+}
+
+templ eventForm(c echo.Context, f EventForm, calendars []*repo.Calendar, errors map[string]string, eventID string, rid string, scope string) {
+	if eventID == "" {
+		<form
+			id="event-form"
+			hx-post="/events"
+			hx-target="#modal-root"
+			hx-swap="innerHTML"
+			method="POST"
+			action="/events"
+			class="p-4 flex flex-col gap-3"
+		>
+			@form.CSRFField(c)
+			@eventFields(f, calendars, errors)
+			<div class="flex justify-end gap-2 pt-1">
+				<button type="button" class="btn" hx-get="/events/close" hx-target="#modal-root" hx-swap="innerHTML">cancel</button>
+				<button type="submit" class="btn-primary">save</button>
+			</div>
+		</form>
+	} else {
+		<form
+			id="event-form"
+			hx-post={ eventUpdateURL(eventID, rid, scope) }
+			hx-target="#modal-root"
+			hx-swap="innerHTML"
+			method="POST"
+			class="p-4 flex flex-col gap-3"
+		>
+			@form.CSRFField(c)
+			@eventFields(f, calendars, errors)
+			<div class="flex justify-between pt-1">
+				<button
+					type="button"
+					class="btn-danger"
+					hx-get={ eventConfirmDeleteURL(eventID, rid, scope) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>delete</button>
+				<div class="flex gap-2">
+					<button type="button" class="btn" hx-get="/events/close" hx-target="#modal-root" hx-swap="innerHTML">cancel</button>
+					<button type="submit" class="btn-primary">save</button>
+				</div>
+			</div>
+		</form>
+	}
+}
+
+func eventUpdateURL(eventID, rid, scope string) string {
+	if rid != "" && scope != "" && scope != "all" {
+		return fmt.Sprintf("/events/%s?rid=%s&scope=%s", eventID, rid, scope)
+	}
+	return "/events/" + eventID
+}
+
+func eventConfirmDeleteURL(eventID, rid, scope string) string {
+	if rid != "" {
+		return fmt.Sprintf("/events/%s/confirm-delete?rid=%s&scope=%s", eventID, rid, scope)
+	}
+	return "/events/" + eventID + "/confirm-delete"
+}
+
+templ eventFields(f EventForm, calendars []*repo.Calendar, errors map[string]string) {
+	if form.GetError(errors, "general") != "" {
+		<div class="px-3 py-2 text-xs border alert-error">{ form.GetError(errors, "general") }</div>
+	}
+	<div>
+		<label class="block text-xs text-huginn-dim mb-1">title</label>
+		<input type="text" name="title" value={ f.Title } class="input" placeholder="Event title" autofocus/>
+		@form.FieldError("title", form.GetError(errors, "title"))
+	</div>
+	<div>
+		<label class="block text-xs text-huginn-dim mb-1">calendar</label>
+		<select name="calendar_id" class="input">
+			for _, cal := range calendars {
+				if cal.ID == f.CalendarID {
+					<option value={ cal.ID } selected>{ cal.Name }</option>
+				} else {
+					<option value={ cal.ID }>{ cal.Name }</option>
+				}
+			}
+		</select>
+		@form.FieldError("calendar_id", form.GetError(errors, "calendar_id"))
+	</div>
+	<div class="flex items-center gap-2">
+		if f.AllDay {
+			<input type="checkbox" name="all_day" id="all_day" value="true" class="accent-huginn-accent" checked data-allday-toggle/>
+		} else {
+			<input type="checkbox" name="all_day" id="all_day" value="true" class="accent-huginn-accent" data-allday-toggle/>
+		}
+		<label for="all_day" class="text-xs text-huginn-dim cursor-pointer select-none">all day</label>
+	</div>
+	<div class="grid grid-cols-2 gap-3" id="event-datetime-fields">
+		<div>
+			<label class="block text-xs text-huginn-dim mb-1">start</label>
+			if f.AllDay {
+				<input type="date" name="start_at" value={ f.StartAt } class="input"/>
+			} else {
+				<input type="datetime-local" name="start_at" value={ f.StartAt } class="input"/>
+			}
+			@form.FieldError("start_at", form.GetError(errors, "start_at"))
+		</div>
+		<div>
+			<label class="block text-xs text-huginn-dim mb-1">end</label>
+			if f.AllDay {
+				<input type="date" name="end_at" value={ f.EndAt } class="input"/>
+			} else {
+				<input type="datetime-local" name="end_at" value={ f.EndAt } class="input"/>
+			}
+			@form.FieldError("end_at", form.GetError(errors, "end_at"))
+		</div>
+	</div>
+	<div>
+		<label class="block text-xs text-huginn-dim mb-1">location</label>
+		<input type="text" name="location" value={ f.Location } class="input" placeholder="Optional"/>
+	</div>
+	<div>
+		<label class="block text-xs text-huginn-dim mb-1">description</label>
+		<textarea name="description" class="input resize-none" rows="2" placeholder="Optional">{ f.Description }</textarea>
+	</div>
+	if f.CreatedByName != "" {
+		<div class="flex items-center gap-2 text-[10px] text-huginn-mute pt-1">
+			<span>created by</span>
+			<span class="text-huginn-dim">{ f.CreatedByName }</span>
+		</div>
+	}
+	<!-- Recurrence section -->
+	@recurrenceFields(f)
+}
+
+templ recurrenceFields(f EventForm) {
+	<div class="border-t border-huginn-line pt-3">
+		<div class="flex items-center gap-2 mb-2">
+			if f.RecurEnabled {
+				<input type="checkbox" name="recur_enabled" id="recur_enabled" value="true" class="accent-huginn-accent" checked data-recur-toggle/>
+			} else {
+				<input type="checkbox" name="recur_enabled" id="recur_enabled" value="true" class="accent-huginn-accent" data-recur-toggle/>
+			}
+			<label for="recur_enabled" class="text-xs text-huginn-dim cursor-pointer select-none">repeat</label>
+		</div>
+		<div id="recur-fields" class={ templ.KV("hidden", !f.RecurEnabled) }>
+			<div class="grid grid-cols-2 gap-3 mb-3">
+				<div>
+					<label class="block text-xs text-huginn-dim mb-1">frequency</label>
+					<select name="recur_freq" class="input" data-recur-freq>
+						@recurFreqOption("DAILY",   "Daily",   f.RecurFreq)
+						@recurFreqOption("WEEKLY",  "Weekly",  f.RecurFreq)
+						@recurFreqOption("MONTHLY", "Monthly", f.RecurFreq)
+						@recurFreqOption("YEARLY",  "Yearly",  f.RecurFreq)
+					</select>
+				</div>
+				<div>
+					<label class="block text-xs text-huginn-dim mb-1">every</label>
+					<input type="number" name="recur_interval" value={ fmt.Sprint(recurInterval(f.RecurInterval)) } class="input" min="1" max="99"/>
+				</div>
+			</div>
+			<!-- Weekly day picker (shown only for WEEKLY freq) -->
+			<div id="recur-byday" class={ "mb-3", templ.KV("hidden", f.RecurFreq != "WEEKLY" && f.RecurFreq != "") }>
+				<label class="block text-xs text-huginn-dim mb-1">on</label>
+				<div class="flex gap-1">
+					@dayPill("MO", "M", f.SelectedDays())
+					@dayPill("TU", "T", f.SelectedDays())
+					@dayPill("WE", "W", f.SelectedDays())
+					@dayPill("TH", "T", f.SelectedDays())
+					@dayPill("FR", "F", f.SelectedDays())
+					@dayPill("SA", "S", f.SelectedDays())
+					@dayPill("SU", "S", f.SelectedDays())
+				</div>
+				<!-- Hidden input rebuilt by JS from pill selections -->
+				<input type="hidden" name="recur_byday" id="recur-byday-input" value={ f.RecurByDay }/>
+			</div>
+			<!-- End condition -->
+			<div>
+				<label class="block text-xs text-huginn-dim mb-1">ends</label>
+				<div class="flex flex-col gap-2">
+					<label class="flex items-center gap-2 text-xs text-huginn-fg cursor-pointer">
+						if f.RecurEndType == "never" || f.RecurEndType == "" {
+							<input type="radio" name="recur_end_type" value="never" checked class="accent-huginn-accent" data-recur-end/>
+						} else {
+							<input type="radio" name="recur_end_type" value="never" class="accent-huginn-accent" data-recur-end/>
+						}
+						Never
+					</label>
+					<label class="flex items-center gap-2 text-xs text-huginn-fg cursor-pointer">
+						if f.RecurEndType == "until" {
+							<input type="radio" name="recur_end_type" value="until" checked class="accent-huginn-accent" data-recur-end/>
+						} else {
+							<input type="radio" name="recur_end_type" value="until" class="accent-huginn-accent" data-recur-end/>
+						}
+						On date
+						<input
+							type="date"
+							name="recur_until"
+							value={ f.RecurUntil }
+							class={ "input flex-1", templ.KV("opacity-50 pointer-events-none", f.RecurEndType != "until") }
+							id="recur-until-input"
+						/>
+					</label>
+					<label class="flex items-center gap-2 text-xs text-huginn-fg cursor-pointer">
+						if f.RecurEndType == "count" {
+							<input type="radio" name="recur_end_type" value="count" checked class="accent-huginn-accent" data-recur-end/>
+						} else {
+							<input type="radio" name="recur_end_type" value="count" class="accent-huginn-accent" data-recur-end/>
+						}
+						After
+						<input
+							type="number"
+							name="recur_count"
+							value={ fmt.Sprint(recurCount(f.RecurCount)) }
+							class={ "input w-16", templ.KV("opacity-50 pointer-events-none", f.RecurEndType != "count") }
+							min="1" max="999"
+							id="recur-count-input"
+						/>
+						occurrences
+					</label>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ recurFreqOption(val, label, current string) {
+	if val == current {
+		<option value={ val } selected>{ label }</option>
+	} else {
+		<option value={ val }>{ label }</option>
+	}
+}
+
+templ dayPill(code, label string, selected map[string]bool) {
+	if selected[code] {
+		<button
+			type="button"
+			class="w-7 h-7 rounded-full text-[10px] font-medium bg-huginn-accent text-huginn-bg"
+			data-day={ code }
+			data-day-active="true"
+		>{ label }</button>
+	} else {
+		<button
+			type="button"
+			class="w-7 h-7 rounded-full text-[10px] font-medium bg-huginn-panel text-huginn-mute hover:bg-huginn-surface"
+			data-day={ code }
+			data-day-active="false"
+		>{ label }</button>
+	}
+}
+
+func recurInterval(n int) int {
+	if n <= 0 {
+		return 1
+	}
+	return n
+}
+
+func recurCount(n int) int {
+	if n <= 0 {
+		return 1
+	}
+	return n
+}
+
+// scopeModal asks whether to edit this occurrence, this+future, or all.
+templ scopeModal(c echo.Context, eventID, rid string) {
+	<div
+		id="modal-backdrop"
+		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
+	>
+		<div class="bg-huginn-surface border border-huginn-line w-full max-w-sm mx-4 flex flex-col">
+			<div class="flex items-center px-4 py-3 border-b border-huginn-line">
+				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">edit recurring event</span>
+			</div>
+			<div class="flex flex-col gap-2 p-4">
+				<button
+					class="btn text-left flex flex-col"
+					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=this", eventID, rid) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>
+					<span class="text-xs font-medium">this event</span>
+					<span class="text-[10px] text-huginn-mute">only this occurrence</span>
+				</button>
+				<button
+					class="btn text-left flex flex-col"
+					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=future", eventID, rid) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>
+					<span class="text-xs font-medium">this and following events</span>
+					<span class="text-[10px] text-huginn-mute">from this occurrence onward</span>
+				</button>
+				<button
+					class="btn text-left flex flex-col"
+					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=all", eventID, rid) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>
+					<span class="text-xs font-medium">all events</span>
+					<span class="text-[10px] text-huginn-mute">every occurrence in the series</span>
+				</button>
+			</div>
+			<div class="px-4 pb-4">
+				<button class="btn w-full" hx-get="/events/close" hx-target="#modal-root" hx-swap="innerHTML">cancel</button>
+			</div>
+		</div>
+	</div>
+}
+
+// deleteScopeModal asks whether to delete this occurrence, this+future, or all.
+templ deleteScopeModal(eventID, rid, eventTitle string) {
+	<div
+		id="modal-backdrop"
+		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
+	>
+		<div class="bg-huginn-surface border border-huginn-line w-full max-w-sm mx-4 flex flex-col">
+			<div class="flex items-center px-4 py-3 border-b border-huginn-line">
+				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">delete recurring event</span>
+			</div>
+			<div class="px-4 pt-3 text-xs text-huginn-dim">
+				delete <span class="text-huginn-fg font-medium">{ eventTitle }</span>?
+			</div>
+			<div class="flex flex-col gap-2 p-4">
+				<button
+					class="btn text-left flex flex-col"
+					hx-delete={ fmt.Sprintf("/events/%s?rid=%s&scope=this", eventID, rid) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>
+					<span class="text-xs font-medium text-huginn-danger">this event</span>
+					<span class="text-[10px] text-huginn-mute">only this occurrence</span>
+				</button>
+				<button
+					class="btn text-left flex flex-col"
+					hx-delete={ fmt.Sprintf("/events/%s?rid=%s&scope=future", eventID, rid) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>
+					<span class="text-xs font-medium text-huginn-danger">this and following events</span>
+					<span class="text-[10px] text-huginn-mute">from this occurrence onward</span>
+				</button>
+				<button
+					class="btn text-left flex flex-col"
+					hx-delete={ fmt.Sprintf("/events/%s", eventID) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>
+					<span class="text-xs font-medium text-huginn-danger">all events</span>
+					<span class="text-[10px] text-huginn-mute">every occurrence in the series</span>
+				</button>
+			</div>
+			<div class="px-4 pb-4">
+				<button
+					class="btn w-full"
+					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=this", eventID, rid) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>cancel</button>
+			</div>
+		</div>
+	</div>
+}
+
+// confirmDeleteModal asks for confirmation before deleting a non-recurring event.
+templ confirmDeleteModal(eventID, eventTitle, rid, scope string) {
+	<div
+		id="modal-backdrop"
+		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
+	>
+		<div class="bg-huginn-surface border border-huginn-line w-full max-w-sm mx-4 flex flex-col">
+			<div class="flex items-center px-4 py-3 border-b border-huginn-line">
+				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">delete event</span>
+			</div>
+			<div class="px-4 py-4 text-xs text-huginn-dim">
+				delete <span class="text-huginn-fg font-medium">{ eventTitle }</span>? this can't be undone.
+			</div>
+			<div class="flex justify-between px-4 pb-4">
+				<button
+					class="btn"
+					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=%s", eventID, rid, scope) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>cancel</button>
+				<button
+					class="btn-danger"
+					hx-delete={ confirmDeleteAction(eventID, rid, scope) }
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>delete</button>
+			</div>
+		</div>
+	</div>
+}
+
+func confirmDeleteAction(eventID, rid, scope string) string {
+	if rid != "" && scope != "" {
+		return fmt.Sprintf("/events/%s?rid=%s&scope=%s", eventID, rid, scope)
+	}
+	return "/events/" + eventID
+}
+
+// modalClosed renders nothing — clears the modal root.
+templ modalClosed() {}
+
+// eventReadOnlyModal shows event details for viewers who cannot edit.
+templ eventReadOnlyModal(title, calName, startFmt, endFmt, description, location, createdBy string) {
+	<div
+		id="modal-backdrop"
+		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
+		hx-on:click="if(event.target===this) htmx.ajax('GET','/events/close',{target:'#modal-root',swap:'innerHTML'})"
+	>
+		<div class="bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col">
+			<div class="flex items-center justify-between px-4 py-3 border-b border-huginn-line">
+				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">event</span>
+				<button
+					class="btn-ghost text-huginn-mute"
+					hx-get="/events/close"
+					hx-target="#modal-root"
+					hx-swap="innerHTML"
+				>×</button>
+			</div>
+			<div class="p-4 flex flex-col gap-3 text-xs">
+				<div class="text-sm font-medium text-huginn-fg">{ title }</div>
+				if calName != "" {
+					<div class="text-huginn-mute">{ calName }</div>
+				}
+				<div class="text-huginn-dim">{ startFmt } – { endFmt }</div>
+				if location != "" {
+					<div class="text-huginn-dim">{ location }</div>
+				}
+				if description != "" {
+					<div class="text-huginn-fg whitespace-pre-wrap">{ description }</div>
+				}
+				if createdBy != "" {
+					<div class="text-huginn-mute">created by { createdBy }</div>
+				}
+				<div class="text-huginn-mute italic">view only</div>
+			</div>
+		</div>
+	</div>
+}

@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+    paths-ignore:
+      - "*.md"
+      - LICENSE
+      - .gitignore
+      - "docs/**"
+  pull_request:
+    branches: [master, main]
+    paths-ignore:
+      - "*.md"
+      - LICENSE
+      - .gitignore
+      - "docs/**"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    # Optional: uncomment this service and the migration step below
+    # if you want CI to apply schema changes as part of the workflow.
+    # services:
+    #   postgres:
+    #     image: postgres:16
+    #     env:
+    #       POSTGRES_USER: postgres
+    #       POSTGRES_PASSWORD: postgres
+    #       POSTGRES_DB: huginn
+    #     ports:
+    #       - 5432:5432
+    #     options: >-
+    #       --health-cmd "pg_isready -U postgres -d huginn"
+    #       --health-interval 10s
+    #       --health-timeout 5s
+    #       --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+
+      - name: Download Go modules
+        run: go mod download
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install deps
+        run: make install
+
+      - name: Build
+        run: make build
+
+      - name: Verify generated templ files are committed
+        run: |
+          if ! git diff --quiet -- '*_templ.go'; then
+            echo "::error::Generated templ files are out of date. Run 'templ generate' and commit."
+            git diff --stat -- '*_templ.go'
+            exit 1
+          fi
+
+      - name: Verify compiled CSS is committed
+        run: |
+          if ! git diff --quiet -- 'static/css/output.css'; then
+            echo "::error::Compiled CSS is out of date. Run 'npm run css:build' and commit."
+            git diff --stat -- 'static/css/output.css'
+            exit 1
+          fi
+
+      - name: Verify generated static pages are committed
+        run: |
+          if ! git diff --quiet -- 'generated/'; then
+            echo "::error::Generated static pages are out of date. Run 'make generate' and commit."
+            git diff --stat -- 'generated/'
+            exit 1
+          fi
+      # - name: Run migrations
+      #   env:
+      #     DATABASE_URL: postgres://postgres:postgres@localhost:5432/huginn?sslmode=disable
+      #   run: make migrate
+
+      - name: Run tests
+        run: make test
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+
+      - name: Lint templ files
+        run: make templint

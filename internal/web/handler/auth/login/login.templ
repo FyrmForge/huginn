@@ -1,0 +1,77 @@
+package login
+
+import (
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/web/components"
+	"github.com/FyrmForge/huginn/internal/web/components/form"
+)
+
+templ loginPage(c echo.Context, devAuthEmail string, f LoginForm, errors map[string]string) {
+	@components.Layout(c, "Log In") {
+		<div class="max-w-sm mx-auto mt-20 bg-huginn-surface border border-huginn-line p-8">
+			<div class="mb-6 text-center">
+				<span class="text-huginn-accent font-semibold tracking-widest text-lg">huginn</span>
+			</div>
+			if devAuthEmail != "" {
+				@devLoginForm(c, devAuthEmail)
+			} else {
+				@loginForm(c, f, errors)
+			}
+		</div>
+	}
+}
+
+templ devLoginForm(c echo.Context, email string) {
+	<form method="POST" action="/dev-login">
+		@form.CSRFField(c)
+		<p class="text-huginn-mute text-xs mb-2 text-center uppercase tracking-widest">dev bypass</p>
+		<p class="text-huginn-fg text-xs mb-6 text-center font-mono">{ email }</p>
+		<button type="submit" class="btn-primary w-full justify-center">dev login</button>
+	</form>
+}
+
+templ loginForm(c echo.Context, f LoginForm, errors map[string]string) {
+	<form
+		id="login-form"
+		hx-post="/login"
+		hx-swap="outerHTML"
+		hx-target="#login-form"
+		method="POST"
+		action="/login"
+	>
+		@form.CSRFField(c)
+		if form.GetError(errors, "general") != "" {
+			<div class="mb-4 px-3 py-2 border text-xs alert-error">
+				{ form.GetError(errors, "general") }
+			</div>
+		}
+		<div class="mb-4">
+			<label for="email" class="block text-xs text-huginn-dim mb-1">email</label>
+			<input
+				type="email"
+				id="email"
+				name="email"
+				value={ f.Email }
+				class="input"
+				hx-post="/login/validate/email"
+				hx-trigger="blur, input[this.closest('div').querySelector('[data-has-error=true]')] delay:300ms"
+				hx-swap="none"
+			/>
+			@form.FieldError("email", form.GetError(errors, "email"))
+		</div>
+		<div class="mb-6">
+			<label for="password" class="block text-xs text-huginn-dim mb-1">password</label>
+			<input
+				type="password"
+				id="password"
+				name="password"
+				class="input"
+				hx-post="/login/validate/password"
+				hx-trigger="blur, input[this.closest('div').querySelector('[data-has-error=true]')] delay:300ms"
+				hx-swap="none"
+			/>
+			@form.FieldError("password", form.GetError(errors, "password"))
+		</div>
+		<button type="submit" class="btn-primary w-full justify-center">log in</button>
+	</form>
+}

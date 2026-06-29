@@ -1,0 +1,90 @@
+# Schema reference: https://github.com/FyrmForge/hamr/blob/master/docs/guide/hamr-toml.md
+
+[hamr]
+version = "0.25.2"
+scaffolded_at = "2026-06-29"
+
+[options]
+database = "postgres"
+db_connector = "sqlx"
+auth = "session"
+css = "tailwind"
+websockets = true
+e2e = true
+stripe = false
+locale = false
+storage = "local"
+alpine = false
+
+[static]
+dir = "static"
+dist = "dist"
+manifest = "internal/web/components/staticmanifest.go"
+package = "components"
+
+[dev]
+proxy_listen = ":3000"
+proxy_target = "$PORT"
+inject_reload = true
+hamr_console_capture = true
+hamr_console_filter = false
+
+[[dev.docker_compose]]
+name = "deps"
+file = "docker/docker-compose.yaml"
+keep_running = false
+wait_ready = true
+
+[[dev.watch]]
+name = "templ"
+watch = "**/*.templ"
+ignore = "*_templ.go"
+cmd = "templ generate"
+debounce = 100
+
+[[dev.watch]]
+name = "tailwind"
+watch = ["**/*.templ", "css/**/*"]
+ignore = "*_templ.go"
+cmd = "npm run css:build"
+debounce = 200
+
+[[dev.watch]]
+name = "site"
+watch = ["**/*.go", "**/*.templ", ".env"]
+ignore = ["*_templ.go", "*_test.go"]
+cmd = "go build -o ./bin/site ./cmd/site && ./bin/site --generate"
+run = "./bin/site"
+depends = ["templ"]
+reload = "full"
+
+[[dev.watch]]
+name = "static"
+watch = ["static/**/*"]
+cmd = "hamr gen static"
+debounce = 200
+
+[dev.mcp]
+enabled = true
+
+[dev.mcp.access]
+dev    = "read"
+logs   = "write"
+docker = "write"
+mail   = "write"
+build  = "write"
+stripe = "write"
+
+[lint.templ]
+# Each rule is enabled by listing it with "warning" or "error". Omit a rule or
+# set it to "off" to disable it. Unknown rule IDs fail with an error.
+inline-if              = "error"
+inline-for             = "error"
+inline-switch          = "error"
+no-native-form-actions = "error"
+htmx-conflict          = "error"
+img-alt                = "warning"
+no-href                = "warning"
+inline-style           = "warning"
+empty-class            = "warning"
+js-href                = "warning"

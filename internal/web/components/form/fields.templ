@@ -1,0 +1,73 @@
+package form
+
+import (
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+)
+
+// FieldError renders a validation error for a form field.
+// Always renders the element so it can be targeted by OOB swaps.
+templ FieldError(field string, err string) {
+	<span class="text-red-400 text-sm mt-1 block" id={ "error-" + field } data-has-error={ strconv.FormatBool(err != "") } aria-live="polite">
+		if err != "" {
+			{ err }
+		}
+	</span>
+}
+
+// FieldErrorOOB renders an out-of-band swap for a field error (used with HTMX blur validation).
+templ FieldErrorOOB(field string, err string) {
+	<span class="text-red-400 text-sm mt-1 block" id={ "error-" + field } data-has-error={ strconv.FormatBool(err != "") } aria-live="polite" hx-swap-oob="true">
+		if err != "" {
+			{ err }
+		}
+	</span>
+}
+
+// CSRFField renders a hidden CSRF token input.
+templ CSRFField(c echo.Context) {
+	<input type="hidden" name="csrf_token" value={ c.Get("csrf").(string) }/>
+}
+
+// TimezoneDatalist renders the shared <datalist> for timezone inputs.
+// Pair with <input list="tz-list" ...> on the timezone field.
+templ TimezoneDatalist() {
+	<datalist id="tz-list">
+		<option value="UTC"/>
+		<option value="America/New_York"/>
+		<option value="America/Chicago"/>
+		<option value="America/Denver"/>
+		<option value="America/Los_Angeles"/>
+		<option value="America/Anchorage"/>
+		<option value="Pacific/Honolulu"/>
+		<option value="Europe/London"/>
+		<option value="Europe/Dublin"/>
+		<option value="Europe/Paris"/>
+		<option value="Europe/Berlin"/>
+		<option value="Europe/Amsterdam"/>
+		<option value="Europe/Rome"/>
+		<option value="Europe/Madrid"/>
+		<option value="Europe/Stockholm"/>
+		<option value="Europe/Warsaw"/>
+		<option value="Europe/Bucharest"/>
+		<option value="Europe/Helsinki"/>
+		<option value="Europe/Athens"/>
+		<option value="Europe/Istanbul"/>
+		<option value="Europe/Moscow"/>
+		<option value="Asia/Dubai"/>
+		<option value="Asia/Karachi"/>
+		<option value="Asia/Kolkata"/>
+		<option value="Asia/Dhaka"/>
+		<option value="Asia/Bangkok"/>
+		<option value="Asia/Shanghai"/>
+		<option value="Asia/Singapore"/>
+		<option value="Asia/Tokyo"/>
+		<option value="Asia/Seoul"/>
+		<option value="Australia/Perth"/>
+		<option value="Australia/Adelaide"/>
+		<option value="Australia/Sydney"/>
+		<option value="Pacific/Auckland"/>
+		<option value="Pacific/Auckland"/>
+	</datalist>
+}

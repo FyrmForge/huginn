@@ -1,0 +1,27 @@
+BEGIN;
+CREATE TABLE sessions (
+    id          TEXT PRIMARY KEY,
+    subject_id  TEXT,
+    token       TEXT        NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    -- Add your own metadata columns here
+);
+
+CREATE INDEX idx_sessions_token ON sessions (token);
+CREATE INDEX idx_sessions_subject_id ON sessions (subject_id) WHERE subject_id IS NOT NULL;
+
+CREATE TABLE users (
+    id              TEXT PRIMARY KEY,
+    email           TEXT        NOT NULL UNIQUE,
+    password_hash   TEXT        NOT NULL,
+    name            TEXT        NOT NULL DEFAULT '',
+    role            TEXT        NOT NULL DEFAULT 'user',
+    avatar_url      TEXT        NOT NULL DEFAULT '',
+    active          BOOLEAN     NOT NULL DEFAULT true,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_users_email ON users (email);
+COMMIT;

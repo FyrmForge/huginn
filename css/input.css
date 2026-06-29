@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@layer base {
+  html, body {
+    @apply font-mono bg-huginn-bg text-huginn-fg antialiased;
+    font-feature-settings: "calt" 1, "liga" 1;
+  }
+  body {
+    background-image:
+      radial-gradient(1200px 600px at 100% -10%, rgba(245, 166, 35, 0.05), transparent 60%),
+      radial-gradient(800px 400px at -10% 110%, rgba(245, 166, 35, 0.03), transparent 60%);
+  }
+  ::selection {
+    background: rgba(245, 166, 35, 0.35);
+    color: #fff;
+  }
+  a {
+    @apply text-huginn-accent hover:text-huginn-accent-glow underline-offset-2 hover:underline;
+  }
+  hr {
+    @apply border-huginn-line;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a32 transparent;
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: #2a2a32;
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: #3a3a42; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-sm
+           font-mono text-xs uppercase tracking-wider
+           border border-huginn-line bg-huginn-panel text-huginn-fg
+           hover:border-huginn-accent hover:text-huginn-accent
+           transition-colors cursor-pointer;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-1.5 px-2 py-1 rounded-sm
+           font-mono text-xs text-huginn-dim
+           hover:text-huginn-accent hover:bg-huginn-panel
+           transition-colors cursor-pointer;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-sm
+           font-mono text-xs font-medium
+           bg-huginn-accent text-huginn-bg
+           hover:bg-huginn-accent-glow
+           transition-colors cursor-pointer;
+  }
+  .btn-danger {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-sm
+           font-mono text-xs font-medium
+           bg-huginn-danger/10 border border-huginn-danger/30 text-huginn-danger
+           hover:bg-huginn-danger/20
+           transition-colors cursor-pointer;
+  }
+  .input {
+    @apply w-full px-3 py-1.5 rounded-sm
+           bg-huginn-panel border border-huginn-line text-huginn-fg text-xs
+           placeholder:text-huginn-mute
+           focus:outline-none focus:border-huginn-accent focus:ring-1 focus:ring-huginn-accent/20;
+  }
+  .chip {
+    @apply inline-block px-1.5 py-0.5 rounded-sm
+           bg-huginn-panel border border-huginn-line
+           font-mono text-[10px] text-huginn-mute;
+  }
+  .card {
+    @apply bg-huginn-surface border border-huginn-line rounded-sm p-4;
+  }
+  .alert-success { @apply bg-huginn-ok/10 border border-huginn-ok/30 text-huginn-ok rounded-sm; }
+  .alert-error   { @apply bg-huginn-danger/10 border border-huginn-danger/30 text-huginn-danger rounded-sm; }
+  .alert-warning { @apply bg-huginn-accent/10 border border-huginn-accent/30 text-huginn-accent rounded-sm; }
+  .alert-info    { @apply bg-huginn-fg/5 border border-huginn-line text-huginn-dim rounded-sm; }
+}

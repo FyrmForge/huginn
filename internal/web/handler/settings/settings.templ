@@ -1,0 +1,248 @@
+package settings
+
+import (
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/repo"
+	"github.com/FyrmForge/huginn/internal/web/components"
+	"github.com/FyrmForge/huginn/internal/web/components/form"
+)
+
+templ settingsPage(c echo.Context, d PageData) {
+	@components.AppLayout(c, "Settings") {
+		<div class="max-w-xl mx-auto px-4 py-6 flex flex-col gap-10">
+
+			<!-- General -->
+			<section>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">general</h2>
+				<form method="POST" action="/settings" class="flex flex-col gap-4">
+					@form.CSRFField(c)
+					<div>
+						<label class="block text-xs text-huginn-dim mb-1">timezone</label>
+						<input type="text" name="timezone" value={ d.Form.Timezone } class="input" placeholder="UTC" list="tz-list" autocomplete="off"/>
+						@form.TimezoneDatalist()
+					</div>
+					<div class="grid grid-cols-2 gap-4">
+						<div>
+							<label class="block text-xs text-huginn-dim mb-1">date format</label>
+							<select name="date_format" class="input">
+								@selectOption("YYYY-MM-DD", "YYYY-MM-DD", d.Form.DateFormat)
+								@selectOption("DD/MM/YYYY", "DD/MM/YYYY", d.Form.DateFormat)
+								@selectOption("MM/DD/YYYY", "MM/DD/YYYY", d.Form.DateFormat)
+							</select>
+						</div>
+						<div>
+							<label class="block text-xs text-huginn-dim mb-1">time format</label>
+							<select name="time_format" class="input">
+								@selectOption("24h", "24h", d.Form.TimeFormat)
+								@selectOption("12h", "12h (AM/PM)", d.Form.TimeFormat)
+							</select>
+						</div>
+					</div>
+					<div class="grid grid-cols-2 gap-4">
+						<div>
+							<label class="block text-xs text-huginn-dim mb-1">week starts on</label>
+							<select name="first_day_of_week" class="input">
+								if d.Form.FirstDayOfWeek == 1 {
+									<option value="1" selected>Monday</option>
+									<option value="0">Sunday</option>
+								} else {
+									<option value="1">Monday</option>
+									<option value="0" selected>Sunday</option>
+								}
+							</select>
+						</div>
+						<div>
+							<label class="block text-xs text-huginn-dim mb-1">default view</label>
+							<select name="default_view" class="input">
+								@selectOption("month", "Month", d.Form.DefaultView)
+								@selectOption("week", "Week", d.Form.DefaultView)
+							</select>
+						</div>
+					</div>
+					<div>
+						<label class="block text-xs text-huginn-dim mb-1">default event duration (minutes)</label>
+						<input type="number" name="default_event_duration_mins" value={ itoa(d.Form.DefaultEventDurationMin) } class="input" min="15" max="480" step="15"/>
+					</div>
+					<div class="flex justify-end">
+						<button type="submit" class="btn-primary">save</button>
+					</div>
+				</form>
+			</section>
+
+			<!-- Devices / CalDAV -->
+			<section>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">devices &amp; caldav</h2>
+				if d.NewToken != "" {
+					<div class="mb-4 p-4 border border-huginn-ok/30 bg-huginn-ok/5">
+						<p class="text-xs text-huginn-ok mb-2">App password created. Copy it now — it won&apos;t be shown again.</p>
+						<code class="block text-xs font-mono text-huginn-hi bg-huginn-panel px-3 py-2 break-all">{ d.NewToken }</code>
+						<p class="text-[10px] text-huginn-mute mt-2">CalDAV server: { calDAVBaseURL(c) }/dav/</p>
+					</div>
+				}
+				<div class="mb-4">
+					<form method="POST" action="/settings/devices" class="flex gap-2">
+						@form.CSRFField(c)
+						<input type="text" name="name" class="input flex-1" placeholder="iPhone, Thunderbird, DAVx5…"/>
+						<button type="submit" class="btn-primary">add device</button>
+					</form>
+				</div>
+				if len(d.Devices) == 0 {
+					<p class="text-xs text-huginn-mute">No devices connected.</p>
+				} else {
+					<div class="flex flex-col gap-1">
+						for _, ap := range d.Devices {
+							<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+								<span class="text-xs text-huginn-fg flex-1">{ ap.Name }</span>
+								if ap.RevokedAt != nil {
+									<span class="chip text-huginn-danger">revoked</span>
+								} else {
+									<form method="POST" action={ templ.URL("/settings/devices/" + ap.ID + "/revoke") } class="inline">
+										@form.CSRFField(c)
+										<button type="submit" class="btn-ghost text-huginn-danger">revoke</button>
+									</form>
+								}
+							</div>
+						}
+					</div>
+				}
+			</section>
+
+			<!-- Connections -->
+			<section>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">connections</h2>
+				<div class="mb-4 flex gap-2">
+					<a href="/connections/google/connect" class="btn-primary">connect Google</a>
+					<a href="/connections/outlook/connect" class="btn-primary">connect Outlook</a>
+				</div>
+				if len(d.Conns) == 0 {
+					<p class="text-xs text-huginn-mute">No external calendars connected.</p>
+				} else {
+					<div class="flex flex-col gap-1">
+						for _, conn := range d.Conns {
+							<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+								<div class="flex-1">
+									<span class="text-xs text-huginn-fg">{ conn.Provider }</span>
+									if conn.ExternalEmail != "" {
+										<span class="text-xs text-huginn-mute ml-2">{ conn.ExternalEmail }</span>
+									}
+									<span class={ "chip ml-2 " + connStatusClass(conn.Status) }>{ conn.Status }</span>
+								</div>
+								<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/sync") } class="inline">
+									@form.CSRFField(c)
+									<button type="submit" class="btn-ghost">sync</button>
+								</form>
+								<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/disconnect") } class="inline">
+									@form.CSRFField(c)
+									<button type="submit" class="btn-ghost text-huginn-danger">disconnect</button>
+								</form>
+							</div>
+						}
+					</div>
+				}
+			</section>
+
+			<!-- Routing Rules -->
+			<section>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">
+					routing rules
+					<a href="/routing/new" class="btn-primary text-[10px] px-2 py-0.5 ml-auto">+ new rule</a>
+				</h2>
+				if len(d.Rules) == 0 {
+					<p class="text-xs text-huginn-mute">No routing rules. Create one to auto-file imported events.</p>
+				} else {
+					<div class="flex flex-col gap-1">
+						for _, r := range d.Rules {
+							<div class="flex items-start gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+								<div class="flex-1 min-w-0">
+									<span class="text-xs text-huginn-fg">{ r.Name }</span>
+									<span class="chip ml-2">{ r.RuleType }</span>
+									<span class="block text-[10px] text-huginn-mute mt-0.5">{ r.MatchValue } → { calName(r.TargetCalendarID, d.Calendars) }</span>
+								</div>
+								<div class="flex gap-2 shrink-0">
+									<a href={ templ.URL("/routing/" + r.ID + "/edit") } class="btn-ghost text-huginn-dim">edit</a>
+									<form method="POST" action={ templ.URL("/routing/" + r.ID + "/delete") } class="inline">
+										@form.CSRFField(c)
+										<button type="submit" class="btn-ghost text-huginn-danger">delete</button>
+									</form>
+								</div>
+							</div>
+						}
+					</div>
+				}
+			</section>
+
+			<!-- Account -->
+			<section>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">account</h2>
+				<div class="flex flex-col gap-2">
+					if d.User != nil {
+						<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+							<span class="text-xs text-huginn-dim w-16 shrink-0">email</span>
+							<span class="text-xs text-huginn-fg">{ d.User.Email }</span>
+						</div>
+						<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+							<span class="text-xs text-huginn-dim w-16 shrink-0">name</span>
+							<span class="text-xs text-huginn-fg">{ d.User.Name }</span>
+						</div>
+						<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+							<span class="text-xs text-huginn-dim w-16 shrink-0">role</span>
+							<span class="text-xs text-huginn-fg">{ d.User.Role }</span>
+						</div>
+						<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+							<span class="text-xs text-huginn-dim w-16 shrink-0">avatar</span>
+							if d.User.AvatarURL != "" {
+								<img src={ d.User.AvatarURL } class="w-6 h-6 rounded-full object-cover" alt="avatar"/>
+								<span class="text-xs text-huginn-mute truncate">{ d.User.AvatarURL }</span>
+							} else {
+								<span class="text-xs text-huginn-mute">none (initials used)</span>
+							}
+						</div>
+					}
+					<div class="flex justify-end mt-2">
+						<form method="POST" action="/logout">
+							@form.CSRFField(c)
+							<button type="submit" class="btn-ghost text-huginn-danger">log out</button>
+						</form>
+					</div>
+				</div>
+			</section>
+
+		</div>
+	}
+}
+
+templ selectOption(value, label, current string) {
+	if value == current {
+		<option value={ value } selected>{ label }</option>
+	} else {
+		<option value={ value }>{ label }</option>
+	}
+}
+
+func calDAVBaseURL(c echo.Context) string {
+	scheme := "http"
+	if c.Request().TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + c.Request().Host
+}
+
+func connStatusClass(status string) string {
+	switch status {
+	case "active":
+		return "text-huginn-ok"
+	case "error":
+		return "text-huginn-danger"
+	default:
+		return "text-huginn-mute"
+	}
+}
+
+func calName(id string, cals []*repo.Calendar) string {
+	for _, c := range cals {
+		if c.ID == id {
+			return c.Name
+		}
+	}
+	return id
+}

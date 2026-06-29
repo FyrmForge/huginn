@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS exports;
+DROP TABLE IF EXISTS import_jobs;

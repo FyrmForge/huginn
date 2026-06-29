@@ -1,0 +1,58 @@
+package connections
+
+import (
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/repo"
+	"github.com/FyrmForge/huginn/internal/web/components"
+	"github.com/FyrmForge/huginn/internal/web/components/form"
+)
+
+templ connectionsPage(c echo.Context, conns []*repo.SyncConnection) {
+	@components.AppLayout(c, "Connections") {
+		<div class="max-w-lg mx-auto px-4 py-6">
+			<h1 class="text-sm font-medium text-huginn-fg uppercase tracking-wider mb-4">external connections</h1>
+
+			<div class="mb-6 flex gap-2">
+				<a href="/connections/google/connect" class="btn-primary">connect Google</a>
+				<a href="/connections/outlook/connect" class="btn-primary">connect Outlook</a>
+			</div>
+
+			if len(conns) == 0 {
+				<p class="text-xs text-huginn-mute">No external calendars connected.</p>
+			} else {
+				<div class="flex flex-col gap-1">
+					for _, conn := range conns {
+						<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
+							<div class="flex-1">
+								<span class="text-xs text-huginn-fg">{ conn.Provider }</span>
+								if conn.ExternalEmail != "" {
+									<span class="text-xs text-huginn-mute ml-2">{ conn.ExternalEmail }</span>
+								}
+								<span class={ "chip ml-2 " + connStatusClass(conn.Status) }>{ conn.Status }</span>
+							</div>
+							<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/sync") } class="inline">
+								@form.CSRFField(c)
+								<button type="submit" class="btn-ghost">sync</button>
+							</form>
+							<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/disconnect") } class="inline">
+								@form.CSRFField(c)
+								<button type="submit" class="btn-ghost text-huginn-danger">disconnect</button>
+							</form>
+						</div>
+					}
+				</div>
+			}
+		</div>
+	}
+}
+
+func connStatusClass(status string) string {
+	switch status {
+	case "active":
+		return "text-huginn-ok"
+	case "error":
+		return "text-huginn-danger"
+	default:
+		return "text-huginn-mute"
+	}
+}

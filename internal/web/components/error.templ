@@ -1,0 +1,21 @@
+package components
+
+import (
+	"net/http"
+	"strconv"
+)
+
+// ErrorPage returns a templ component that renders an error page.
+// This satisfies the middleware.ErrorPage signature.
+func ErrorPage(code int, message string) templ.Component {
+	return errorPage(code, message)
+}
+
+templ errorPage(code int, message string) {
+	@Layout(nil, http.StatusText(code)) {
+		<div class="max-w-lg mx-auto mt-16 text-center p-8 bg-huginn-surface border border-huginn-line">
+			<h2 class="text-5xl font-bold text-huginn-accent mb-2">{ strconv.Itoa(code) }</h2>
+			<p class="text-huginn-dim text-sm">{ message }</p>
+		</div>
+	}
+}

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS event_sources;
+DROP TABLE IF EXISTS events;

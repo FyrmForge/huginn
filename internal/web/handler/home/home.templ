@@ -1,0 +1,14 @@
+package home
+
+import (
+	"github.com/labstack/echo/v4"
+	"github.com/FyrmForge/huginn/internal/web/components"
+)
+
+templ homePage(c echo.Context) {
+	@components.AppLayout(c, "Calendar") {
+		<div class="flex items-center justify-center h-full text-huginn-mute text-xs">
+			calendar coming soon
+		</div>
+	}
+}
