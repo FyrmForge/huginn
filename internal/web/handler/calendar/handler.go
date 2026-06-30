@@ -3,6 +3,7 @@ package calendar
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -43,11 +44,9 @@ func (h *handler) Month(c echo.Context) error {
 		return err
 	}
 
-	grid := buildMonthGrid(year, month, occs)
-
 	return respond.HTML(c, http.StatusOK, monthPage(c, monthViewData{
 		Calendars: calendars,
-		Grid:      grid,
+		Weeks:     buildMonthWeeks(year, month, occs),
 		Year:      year,
 		Month:     month,
 	}))
@@ -69,7 +68,7 @@ func (h *handler) Week(c echo.Context) error {
 	}
 	return respond.HTML(c, http.StatusOK, weekPage(c, weekViewData{
 		Calendars: calendars,
-		Days:      buildWeekGrid(weekStart, occs),
+		Week:      buildWeekGrid(weekStart, occs),
 		WeekStart: weekStart,
 	}))
 }
@@ -100,9 +99,7 @@ func (h *handler) Grid(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	grid := buildMonthGrid(year, month, occs)
-
-	return respond.HTML(c, http.StatusOK, monthGrid(grid, year, month))
+	return respond.HTML(c, http.StatusOK, monthGrid(buildMonthWeeks(year, month, occs), year, month))
 }
 
 func (h *handler) loadMonthData(c echo.Context, user *repo.User, year int, month time.Month) ([]*repo.Calendar, []service.Occurrence, error) {
@@ -133,6 +130,12 @@ func currentYearMonth(c echo.Context) (int, time.Month) {
 	now := time.Now()
 	year := now.Year()
 	month := now.Month()
+	// ym=YYYY-MM from the native month picker takes precedence.
+	if ym := c.QueryParam("ym"); ym != "" {
+		if t, err := time.Parse("2006-01", ym); err == nil {
+			return t.Year(), t.Month()
+		}
+	}
 	if y, err := strconv.Atoi(c.QueryParam("year")); err == nil && y > 2000 {
 		year = y
 	}
@@ -147,11 +150,13 @@ type MonthDay struct {
 	Date       time.Time
 	OtherMonth bool
 	IsToday    bool
+	IsPast     bool
 	Events     []service.Occurrence
 }
 
-// buildMonthGrid builds a 6-week calendar grid for the given month.
-func buildMonthGrid(year int, month time.Month, occs []service.Occurrence) []MonthDay {
+// buildMonthWeeks builds the 6-week month grid. Single-day events live in their
+// day cell; multi-day events become spanning bars on each week they cross.
+func buildMonthWeeks(year int, month time.Month, occs []service.Occurrence) []MonthWeek {
 	first := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
 	startOffset := int(first.Weekday()) - 1
 	if startOffset < 0 {
@@ -160,31 +165,40 @@ func buildMonthGrid(year int, month time.Month, occs []service.Occurrence) []Mon
 	start := first.AddDate(0, 0, -startOffset)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 
-	byDate := make(map[time.Time][]service.Occurrence)
+	single := make(map[time.Time][]service.Occurrence)
+	var multi []service.Occurrence
 	for _, o := range occs {
-		startDay := o.Start.UTC().Truncate(24 * time.Hour)
-		endDay := o.End.UTC().Truncate(24 * time.Hour)
-		for d := startDay; !d.After(endDay); d = d.AddDate(0, 0, 1) {
-			byDate[d] = append(byDate[d], o)
+		if isMultiDay(o) {
+			multi = append(multi, o)
+			continue
 		}
+		s, _ := occDayRange(o)
+		single[s] = append(single[s], o)
 	}
 
-	grid := make([]MonthDay, 42)
-	for i := range grid {
-		d := start.AddDate(0, 0, i)
-		grid[i] = MonthDay{
-			Date:       d,
-			OtherMonth: d.Month() != month,
-			IsToday:    d.Equal(today),
-			Events:     byDate[d],
+	weeks := make([]MonthWeek, 6)
+	for w := range weeks {
+		weekStart := start.AddDate(0, 0, w*7)
+		days := make([]MonthDay, 7)
+		for i := range days {
+			d := weekStart.AddDate(0, 0, i)
+			days[i] = MonthDay{
+				Date:       d,
+				OtherMonth: d.Month() != month,
+				IsToday:    d.Equal(today),
+				IsPast:     d.Before(today),
+				Events:     single[d],
+			}
 		}
+		bars, lanes := barsForWeek(weekStart, multi)
+		weeks[w] = MonthWeek{Days: days, Bars: bars, Lanes: lanes}
 	}
-	return grid
+	return weeks
 }
 
 type monthViewData struct {
 	Calendars []*repo.Calendar
-	Grid      []MonthDay
+	Weeks     []MonthWeek
 	Year      int
 	Month     time.Month
 }
@@ -201,14 +215,118 @@ type WeekOccurrence struct {
 type WeekDay struct {
 	Date    time.Time
 	IsToday bool
-	AllDay  []service.Occurrence
 	Timed   []WeekOccurrence
+}
+
+// SpanBar is a multi-day or all-day event drawn as a horizontal bar spanning
+// columns within one week row (clamped to that week).
+type SpanBar struct {
+	Occ       service.Occurrence
+	StartCol  int // 0-based column within the row
+	EndCol    int // inclusive
+	Lane      int
+	ClipLeft  bool // event started before this row (no left cap)
+	ClipRight bool // event continues after this row (no right cap)
+}
+
+// Span returns the number of columns the bar covers.
+func (b SpanBar) Span() int { return b.EndCol - b.StartCol + 1 }
+
+// MonthWeek is one row of the month grid: 7 day cells plus the multi-day bars
+// that span across them.
+type MonthWeek struct {
+	Days  []MonthDay
+	Bars  []SpanBar
+	Lanes int
+}
+
+// WeekData is the full week view: 7 day columns, the multi-day/all-day span
+// bars across the top, and how many lanes those bars need.
+type WeekData struct {
+	Days  []WeekDay
+	Bars  []SpanBar
+	Lanes int
 }
 
 type weekViewData struct {
 	Calendars []*repo.Calendar
-	Days      []WeekDay
+	Week      WeekData
 	WeekStart time.Time
+}
+
+// packLanes assigns each bar the lowest lane whose previous bar ends before this
+// one starts (greedy interval packing). Returns the number of lanes used.
+func packLanes(bars []SpanBar) int {
+	sort.SliceStable(bars, func(i, j int) bool {
+		if bars[i].StartCol != bars[j].StartCol {
+			return bars[i].StartCol < bars[j].StartCol
+		}
+		return bars[i].Span() > bars[j].Span()
+	})
+	laneEnd := []int{} // last occupied column per lane
+	for i := range bars {
+		placed := -1
+		for l := range laneEnd {
+			if laneEnd[l] < bars[i].StartCol {
+				placed = l
+				break
+			}
+		}
+		if placed == -1 {
+			laneEnd = append(laneEnd, bars[i].EndCol)
+			bars[i].Lane = len(laneEnd) - 1
+		} else {
+			laneEnd[placed] = bars[i].EndCol
+			bars[i].Lane = placed
+		}
+	}
+	return len(laneEnd)
+}
+
+// occDayRange returns the inclusive [startDay, endDay] (UTC, day-truncated) an
+// occurrence covers.
+func occDayRange(o service.Occurrence) (time.Time, time.Time) {
+	s := o.Start.UTC().Truncate(24 * time.Hour)
+	e := o.End.UTC().Truncate(24 * time.Hour)
+	if e.Before(s) {
+		e = s
+	}
+	return s, e
+}
+
+func isMultiDay(o service.Occurrence) bool {
+	s, e := occDayRange(o)
+	return e.After(s)
+}
+
+// barsForWeek clamps the given multi-day/all-day occurrences to [weekStart,
+// weekStart+6] and returns the bars overlapping that week, lane-packed.
+func barsForWeek(weekStart time.Time, occs []service.Occurrence) ([]SpanBar, int) {
+	weekEnd := weekStart.AddDate(0, 0, 6)
+	var bars []SpanBar
+	for _, o := range occs {
+		s, e := occDayRange(o)
+		if e.Before(weekStart) || s.After(weekEnd) {
+			continue
+		}
+		segStart := s
+		if segStart.Before(weekStart) {
+			segStart = weekStart
+		}
+		segEnd := e
+		if segEnd.After(weekEnd) {
+			segEnd = weekEnd
+		}
+		bars = append(bars, SpanBar{
+			Occ:       o,
+			StartCol:  int(segStart.Sub(weekStart).Hours()) / 24,
+			EndCol:    int(segEnd.Sub(weekStart).Hours()) / 24,
+			ClipLeft:  s.Before(weekStart),
+			ClipRight: e.After(weekEnd),
+		})
+	}
+	lanes := packLanes(bars)
+	return bars, lanes
 }
 
 func currentWeekStart(c echo.Context) time.Time {
@@ -221,7 +339,13 @@ func currentWeekStart(c echo.Context) time.Time {
 	monday = time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, time.UTC)
 	if w := c.QueryParam("week"); w != "" {
 		if t, err := time.Parse("2006-01-02", w); err == nil {
-			monday = t.UTC()
+			// Snap any picked day to the Monday of its week (no-op for the
+			// prev/next nav, which already passes Mondays).
+			twd := int(t.Weekday())
+			if twd == 0 {
+				twd = 7
+			}
+			monday = t.AddDate(0, 0, -(twd - 1)).UTC()
 		}
 	}
 	return monday
@@ -243,50 +367,40 @@ func (h *handler) loadWeekData(c echo.Context, user *repo.User, weekStart time.T
 	return calendars, occs, nil
 }
 
-func buildWeekGrid(weekStart time.Time, occs []service.Occurrence) []WeekDay {
+// buildWeekGrid lays out a week: timed single-day events go in their day
+// column; all-day and multi-day events become span bars across the top.
+func buildWeekGrid(weekStart time.Time, occs []service.Occurrence) WeekData {
 	today := time.Now().UTC().Truncate(24 * time.Hour)
-	byDate := make(map[time.Time][]service.Occurrence)
-	for _, o := range occs {
-		startDay := o.Start.UTC().Truncate(24 * time.Hour)
-		if o.AllDay {
-			endDay := o.End.UTC().Truncate(24 * time.Hour)
-			for d := startDay; !d.After(endDay); d = d.AddDate(0, 0, 1) {
-				byDate[d] = append(byDate[d], o)
-			}
-		} else {
-			byDate[startDay] = append(byDate[startDay], o)
-		}
-	}
+
 	days := make([]WeekDay, 7)
 	for i := range days {
 		d := weekStart.AddDate(0, 0, i)
-		wd := WeekDay{Date: d, IsToday: d.Equal(today)}
-		for _, o := range byDate[d] {
-			if o.AllDay {
-				wd.AllDay = append(wd.AllDay, o)
-			} else {
-				start := o.Start.UTC()
-				end := o.End.UTC()
-				topPx := start.Hour()*60 + start.Minute()
-				durPx := (end.Hour()*60 + end.Minute()) - topPx
-				if durPx < 20 {
-					durPx = 20
-				}
-				wd.Timed = append(wd.Timed, WeekOccurrence{Occ: o, TopPx: topPx, HeightPx: durPx})
-			}
-		}
-		days[i] = wd
+		days[i] = WeekDay{Date: d, IsToday: d.Equal(today)}
 	}
-	return days
-}
 
-func hasAllDay(days []WeekDay) bool {
-	for _, d := range days {
-		if len(d.AllDay) > 0 {
-			return true
+	var spanning []service.Occurrence
+	for _, o := range occs {
+		if o.AllDay || isMultiDay(o) {
+			spanning = append(spanning, o)
+			continue
 		}
+		startDay := o.Start.UTC().Truncate(24 * time.Hour)
+		idx := int(startDay.Sub(weekStart).Hours()) / 24
+		if idx < 0 || idx > 6 {
+			continue
+		}
+		start := o.Start.UTC()
+		end := o.End.UTC()
+		topPx := start.Hour()*60 + start.Minute()
+		durPx := (end.Hour()*60 + end.Minute()) - topPx
+		if durPx < 20 {
+			durPx = 20
+		}
+		days[idx].Timed = append(days[idx].Timed, WeekOccurrence{Occ: o, TopPx: topPx, HeightPx: durPx})
 	}
-	return false
+
+	bars, lanes := barsForWeek(weekStart, spanning)
+	return WeekData{Days: days, Bars: bars, Lanes: lanes}
 }
 
 func weekHours() []int {

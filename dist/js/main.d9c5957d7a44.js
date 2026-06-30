@@ -19,13 +19,47 @@ document.addEventListener('htmx:sendError', function(evt) {
     console.error('HTMX network error for:', evt.detail.elt);
 });
 
-// Scroll week time grid to 8am on load and after HTMX swaps.
+// Scroll week time grid to the earliest event of the week (8am fallback), on
+// load and after HTMX swaps.
 function scrollWeekGrid() {
     var el = document.getElementById('week-time-grid');
-    if (el) el.scrollTop = 480;
+    if (!el) return;
+    var min = Infinity;
+    el.querySelectorAll('[data-event-cal]').forEach(function(ev) {
+        var t = parseInt(ev.style.top, 10);
+        if (!isNaN(t) && t < min) min = t;
+    });
+    el.scrollTop = (min === Infinity) ? 480 : Math.max(0, min - 24);
 }
 document.addEventListener('DOMContentLoaded', scrollWeekGrid);
 document.addEventListener('htmx:afterSwap', scrollWeekGrid);
+
+// Open the native month/date picker when its transparent overlay is clicked.
+document.addEventListener('click', function(evt) {
+    var inp = evt.target.closest('input[data-jump-picker]');
+    if (inp && typeof inp.showPicker === 'function') {
+        try { inp.showPicker(); } catch (e) { /* unsupported browser: falls back to default */ }
+    }
+});
+
+// Grafana-style time crosshair: a horizontal line across the whole week that
+// follows the cursor, with the time shown in the hour gutter.
+document.addEventListener('mousemove', function(evt) {
+    var grid = document.getElementById('week-time-grid');
+    var cross = document.getElementById('week-crosshair');
+    if (!grid || !cross) return;
+    if (!grid.contains(evt.target)) { cross.classList.add('hidden'); return; }
+    var rect = grid.getBoundingClientRect();
+    var y = evt.clientY - rect.top + grid.scrollTop;
+    if (y < 0 || y > 1440) { cross.classList.add('hidden'); return; }
+    cross.classList.remove('hidden');
+    cross.style.top = y + 'px';
+    var label = document.getElementById('week-crosshair-label');
+    if (label) {
+        var h = Math.floor(y / 60), m = Math.floor(y % 60);
+        label.textContent = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+    }
+});
 
 // All-day toggle: switch datetime-local ↔ date inputs.
 document.addEventListener('change', function(evt) {

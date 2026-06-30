@@ -13,7 +13,7 @@ templ settingsPage(c echo.Context, d PageData) {
 
 			<!-- General -->
 			<section>
-				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">general</h2>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3"><span class="w-1 h-3 bg-huginn-accent/60 rounded-sm shrink-0"></span>general</h2>
 				<form method="POST" action="/settings" class="flex flex-col gap-4">
 					@form.CSRFField(c)
 					<div>
@@ -71,12 +71,13 @@ templ settingsPage(c echo.Context, d PageData) {
 
 			<!-- Devices / CalDAV -->
 			<section>
-				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">devices &amp; caldav</h2>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3"><span class="w-1 h-3 bg-huginn-accent/60 rounded-sm shrink-0"></span>devices &amp; caldav</h2>
 				if d.NewToken != "" {
 					<div class="mb-4 p-4 border border-huginn-ok/30 bg-huginn-ok/5">
 						<p class="text-xs text-huginn-ok mb-2">App password created. Copy it now — it won&apos;t be shown again.</p>
 						<code class="block text-xs font-mono text-huginn-hi bg-huginn-panel px-3 py-2 break-all">{ d.NewToken }</code>
 						<p class="text-[10px] text-huginn-mute mt-2">CalDAV server: { calDAVBaseURL(c) }/dav/</p>
+						<p class="text-[10px] text-huginn-mute mt-1">Username: { d.User.Email } (use this with the password above)</p>
 					</div>
 				}
 				<div class="mb-4">
@@ -109,7 +110,7 @@ templ settingsPage(c echo.Context, d PageData) {
 
 			<!-- Connections -->
 			<section>
-				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">connections</h2>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3"><span class="w-1 h-3 bg-huginn-accent/60 rounded-sm shrink-0"></span>connections</h2>
 				<div class="mb-4 flex gap-2">
 					<a href="/connections/google/connect" class="btn-primary">connect Google</a>
 					<a href="/connections/outlook/connect" class="btn-primary">connect Outlook</a>
@@ -143,7 +144,7 @@ templ settingsPage(c echo.Context, d PageData) {
 
 			<!-- Routing Rules -->
 			<section>
-				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3"><span class="w-1 h-3 bg-huginn-accent/60 rounded-sm shrink-0"></span>
 					routing rules
 					<a href="/routing/new" class="btn-primary text-[10px] px-2 py-0.5 ml-auto">+ new rule</a>
 				</h2>
@@ -173,7 +174,7 @@ templ settingsPage(c echo.Context, d PageData) {
 
 			<!-- Account -->
 			<section>
-				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">account</h2>
+				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3"><span class="w-1 h-3 bg-huginn-accent/60 rounded-sm shrink-0"></span>account</h2>
 				<div class="flex flex-col gap-2">
 					if d.User != nil {
 						<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -27,11 +28,14 @@ func NewCalDAVService(store repo.Store) *CalDAVService {
 // CreateAppPassword generates a new device token, stores its hash, and
 // returns the plain-text token (shown once to the user).
 func (s *CalDAVService) CreateAppPassword(ctx context.Context, userID, name string) (plainToken string, ap *repo.AppPassword, err error) {
-	raw := make([]byte, 32)
+	// 16 random bytes (128-bit) as base64url → 22 chars. Shorter than hex(32)=64
+	// while still cryptographically strong. Existing tokens stay valid (lookup is
+	// by sha256 of whatever the client sends, encoding-agnostic).
+	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {
 		return "", nil, fmt.Errorf("generate token: %w", err)
 	}
-	plain := hex.EncodeToString(raw)
+	plain := base64.RawURLEncoding.EncodeToString(raw)
 	hash := sha256Hex(plain)
 
 	now := time.Now()

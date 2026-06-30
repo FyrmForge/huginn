@@ -18,7 +18,7 @@ templ monthPage(c echo.Context, d monthViewData) {
 		<div class="flex h-full">
 			@calendarSidebar(c, d.Calendars)
 			<div class="flex-1 flex flex-col min-w-0">
-				@monthGrid(d.Grid, d.Year, d.Month)
+				@monthGrid(d.Weeks, d.Year, d.Month)
 			</div>
 		</div>
 	}
@@ -57,7 +57,7 @@ templ calendarSidebar(c echo.Context, calendars []*repo.Calendar) {
 	</aside>
 }
 
-templ monthGrid(grid []MonthDay, year int, month time.Month) {
+templ monthGrid(weeks []MonthWeek, year int, month time.Month) {
 	<div id="cal-grid" class="flex flex-col flex-1 min-h-0">
 		<!-- Header: nav + month label -->
 		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
@@ -69,9 +69,21 @@ templ monthGrid(grid []MonthDay, year int, month time.Month) {
 					hx-swap="outerHTML"
 					class="btn-ghost"
 				>‹</a>
-				<span class="text-xs font-medium text-huginn-fg w-32 text-center">
-					{ month.String() } { fmt.Sprint(year) }
-				</span>
+				<div class="relative w-32 text-center">
+					<span class="text-xs font-medium text-huginn-fg cursor-pointer hover:text-huginn-accent">{ month.String() } { fmt.Sprint(year) }</span>
+					<input
+						type="month"
+						name="ym"
+						value={ fmt.Sprintf("%04d-%02d", year, int(month)) }
+						data-jump-picker
+						aria-label="Jump to month"
+						class="absolute inset-0 w-full opacity-0 cursor-pointer"
+						hx-get="/calendar/grid"
+						hx-trigger="change"
+						hx-target="#cal-grid"
+						hx-swap="outerHTML"
+					/>
+				</div>
 				<a
 					href={ templ.URL(nextMonthURL(year, month)) }
 					hx-get={ nextMonthURL(year, month) }
@@ -94,15 +106,22 @@ templ monthGrid(grid []MonthDay, year int, month time.Month) {
 		<!-- Day-of-week header -->
 		<div class="grid grid-cols-7 border-b border-huginn-line shrink-0">
 			for _, wd := range weekdays {
-				<div class="px-2 py-1 text-[10px] uppercase tracking-widest text-huginn-mute text-center">
+				<div
+					class={
+						"px-2 py-1 text-[10px] uppercase tracking-widest text-center",
+						templ.KV("text-huginn-mute", wd != todayWeekdayShort(weeks) && !isWeekendName(wd)),
+						templ.KV("text-huginn-mute/60", isWeekendName(wd) && wd != todayWeekdayShort(weeks)),
+						templ.KV("text-huginn-accent", wd == todayWeekdayShort(weeks)),
+					}
+				>
 					{ wd }
 				</div>
 			}
 		</div>
-		<!-- Days grid -->
-		<div class="grid grid-cols-7 flex-1 min-h-0 overflow-y-auto">
-			for _, day := range grid {
-				@monthCell(day)
+		<!-- Week rows -->
+		<div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+			for _, week := range weeks {
+				@monthWeekRow(week)
 			}
 		</div>
 	</div>
@@ -118,36 +137,82 @@ templ monthGrid(grid []MonthDay, year int, month time.Month) {
 	></div>
 }
 
-templ monthCell(day MonthDay) {
+// monthWeekRow renders one week: a 7-column grid of day cells plus the
+// multi-day span bars layered over them.
+templ monthWeekRow(week MonthWeek) {
+	<div class="flex-1 min-h-0 relative">
+		<div class="grid grid-cols-7 h-full">
+			for _, day := range week.Days {
+				@monthDayCol(day, week.Lanes)
+			}
+		</div>
+		for _, bar := range week.Bars {
+			@spanBar(bar, 18)
+		}
+	</div>
+}
+
+templ monthDayCol(day MonthDay, lanes int) {
 	<div
 		class={
-			"border-b border-r border-huginn-line p-1 min-h-0 flex flex-col cursor-pointer group",
+			"relative border-b border-r border-huginn-line px-1 pb-1 min-h-0 flex flex-col cursor-pointer group transition-colors hover:bg-huginn-panel/20 overflow-hidden",
 			templ.KV("bg-huginn-panel/30", day.OtherMonth),
-			templ.KV("bg-huginn-accent/5", day.IsToday),
+			templ.KV("bg-huginn-surface/40", isWeekend(day.Date) && !day.OtherMonth && !day.IsToday),
+			templ.KV("bg-huginn-accent/10", day.IsToday),
 		}
 		hx-get={ fmt.Sprintf("/events/new?date=%s", day.Date.Format("2006-01-02")) }
 		hx-target="#modal-root"
 		hx-swap="innerHTML"
 	>
+		<span class="absolute top-1 left-1.5 text-[11px] leading-none text-huginn-mute opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none">+</span>
 		<span
 			class={
-				"text-[10px] self-end px-1 rounded-full mb-0.5",
+				"text-[10px] self-end px-1 mt-1 rounded-full",
 				templ.KV("text-huginn-mute", day.OtherMonth && !day.IsToday),
-				templ.KV("text-huginn-fg", !day.OtherMonth && !day.IsToday),
+				templ.KV("text-huginn-dim", !day.OtherMonth && !day.IsToday && day.IsPast),
+				templ.KV("text-huginn-fg", !day.OtherMonth && !day.IsToday && !day.IsPast),
 				templ.KV("bg-huginn-accent text-huginn-bg font-semibold", day.IsToday),
 			}
 		>{ fmt.Sprint(day.Date.Day()) }</span>
+		<!-- reserve vertical space for the span bars layered above -->
+		if lanes > 0 {
+			<div style={ fmt.Sprintf("height:%dpx", lanes*22) }></div>
+		}
 		<div class="flex flex-col gap-0.5 overflow-hidden">
-			for _, o := range day.Events {
+			for _, o := range cellVisibleChips(day.Events, lanes) {
 				@occurrenceChip(o)
+			}
+			if n := cellMoreCount(day.Events, lanes); n > 0 {
+				<button
+					class="text-[10px] text-left text-huginn-mute hover:text-huginn-accent pl-1.5 truncate transition-colors"
+					hx-get={ weekGridURLForDate(day.Date) }
+					hx-target="#cal-grid"
+					hx-swap="outerHTML"
+					hx-trigger="click consume"
+					hx-push-url={ weekURLForDate(day.Date) }
+				>+{ fmt.Sprint(n) } more</button>
 			}
 		</div>
 	</div>
 }
 
+// spanBar draws a single multi-day bar. topBase is the y-offset before lanes
+// (leaves room for the day number in the month grid).
+templ spanBar(bar SpanBar, topBase int) {
+	<button
+		data-event-cal={ bar.Occ.CalendarID() }
+		class="absolute z-10 text-[10px] leading-none truncate flex items-center rounded-sm pl-1.5 pr-1 transition-colors"
+		style={ spanBarStyle(bar, topBase) }
+		hx-get={ occurrenceEditURL(bar.Occ) }
+		hx-target="#modal-root"
+		hx-swap="innerHTML"
+		hx-trigger="click consume"
+	>{ bar.Occ.Title }</button>
+}
+
 templ occurrenceChip(o service.Occurrence) {
 	<button
-		class="w-full text-left text-[10px] px-1.5 py-0.5 rounded-sm truncate transition-colors"
+		class="w-full text-left text-[10px] pl-2 pr-1.5 py-0.5 rounded-r-sm truncate transition-colors"
 		data-event-cal={ o.CalendarID() }
 		hx-get={ occurrenceEditURL(o) }
 		hx-target="#modal-root"
@@ -161,13 +226,13 @@ templ weekPage(c echo.Context, d weekViewData) {
 		<div class="flex h-full">
 			@calendarSidebar(c, d.Calendars)
 			<div class="flex-1 flex flex-col min-w-0">
-				@weekGrid(d.Days, d.WeekStart)
+				@weekGrid(d.Week, d.WeekStart)
 			</div>
 		</div>
 	}
 }
 
-templ weekGrid(days []WeekDay, weekStart time.Time) {
+templ weekGrid(week WeekData, weekStart time.Time) {
 	<div id="week-grid" class="flex flex-col flex-1 min-h-0">
 		<!-- Header: nav + view switcher -->
 		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
@@ -179,9 +244,21 @@ templ weekGrid(days []WeekDay, weekStart time.Time) {
 					hx-swap="outerHTML"
 					class="btn-ghost"
 				>‹</a>
-				<span class="text-xs font-medium text-huginn-fg w-48 text-center">
-					{ weekStart.Format("Jan 2") } – { weekStart.AddDate(0, 0, 6).Format("Jan 2, 2006") }
-				</span>
+				<div class="relative w-48 text-center">
+					<span class="text-xs font-medium text-huginn-fg cursor-pointer hover:text-huginn-accent">{ weekStart.Format("Jan 2") } – { weekStart.AddDate(0, 0, 6).Format("Jan 2, 2006") }</span>
+					<input
+						type="date"
+						name="week"
+						value={ weekStart.Format("2006-01-02") }
+						data-jump-picker
+						aria-label="Jump to week"
+						class="absolute inset-0 w-full opacity-0 cursor-pointer"
+						hx-get="/week/grid"
+						hx-trigger="change"
+						hx-target="#week-grid"
+						hx-swap="outerHTML"
+					/>
+				</div>
 				<a
 					href={ templ.URL(nextWeekURL(weekStart)) }
 					hx-get={ nextWeekURL(weekStart) }
@@ -204,11 +281,12 @@ templ weekGrid(days []WeekDay, weekStart time.Time) {
 		<!-- Day header row -->
 		<div class="flex shrink-0 border-b border-huginn-line">
 			<div class="w-12 shrink-0"></div>
-			for _, day := range days {
+			for _, day := range week.Days {
 				<div class={
 					"flex-1 text-center py-1 border-l border-huginn-line/50",
 					templ.KV("text-huginn-accent", day.IsToday),
-					templ.KV("text-huginn-mute", !day.IsToday),
+					templ.KV("text-huginn-mute", !day.IsToday && !isWeekend(day.Date)),
+					templ.KV("text-huginn-mute/60", !day.IsToday && isWeekend(day.Date)),
 				}>
 					<div class="text-[10px] uppercase tracking-widest">{ day.Date.Format("Mon") }</div>
 					<div class={
@@ -218,29 +296,30 @@ templ weekGrid(days []WeekDay, weekStart time.Time) {
 				</div>
 			}
 		</div>
-		<!-- All-day row (only when there are all-day events) -->
-		if hasAllDay(days) {
+		<!-- All-day / multi-day span bars -->
+		if week.Lanes > 0 {
 			<div class="flex shrink-0 border-b border-huginn-line">
-				<div class="w-12 shrink-0 flex items-center justify-end pr-2">
+				<div class="w-12 shrink-0 flex items-start justify-end pr-2 pt-1">
 					<span class="text-[9px] text-huginn-mute">all day</span>
 				</div>
-				for _, day := range days {
-					<div class="flex-1 border-l border-huginn-line/50 px-0.5 py-0.5 min-h-5">
-						for _, o := range day.AllDay {
-							<div
-								data-event-cal={ o.CalendarID() }
-								class="text-[10px] px-1 rounded-sm truncate mb-0.5 cursor-pointer"
-								hx-get={ occurrenceEditURL(o) }
-								hx-target="#modal-root"
-								hx-swap="innerHTML"
-							>{ o.Title }</div>
+				<div class="flex-1 relative" style={ fmt.Sprintf("height:%dpx", week.Lanes*22+4) }>
+					<div class="grid grid-cols-7 h-full">
+						for _, day := range week.Days {
+							<div class={
+								"border-l border-huginn-line/50",
+								templ.KV("bg-huginn-accent/[0.06]", day.IsToday),
+								templ.KV("bg-huginn-surface/30", isWeekend(day.Date) && !day.IsToday),
+							}></div>
 						}
 					</div>
-				}
+					for _, bar := range week.Bars {
+						@spanBar(bar, 2)
+					}
+				</div>
 			</div>
 		}
 		<!-- Scrollable time grid -->
-		<div class="flex flex-1 overflow-y-auto" id="week-time-grid">
+		<div class="relative flex flex-1 overflow-y-auto" id="week-time-grid">
 			<!-- Hour labels -->
 			<div class="w-12 shrink-0 relative" style="height: 1440px;">
 				for _, hr := range weekHours() {
@@ -253,8 +332,15 @@ templ weekGrid(days []WeekDay, weekStart time.Time) {
 				}
 			</div>
 			<!-- Day columns -->
-			for _, day := range days {
-				<div class="flex-1 border-l border-huginn-line/50 relative" style="height: 1440px;">
+			for _, day := range week.Days {
+				<div
+					class={
+						"flex-1 border-l border-huginn-line/50 relative",
+						templ.KV("bg-huginn-accent/[0.06]", day.IsToday),
+						templ.KV("bg-huginn-surface/30", isWeekend(day.Date) && !day.IsToday),
+					}
+					style="height: 1440px;"
+				>
 					for _, hr := range weekHours() {
 						<div
 							style={ fmt.Sprintf("position: absolute; top: %dpx; left: 0; right: 0;", hr*60) }
@@ -274,6 +360,11 @@ templ weekGrid(days []WeekDay, weekStart time.Time) {
 					}
 				</div>
 			}
+			<!-- Time crosshair: positioned by main.js on hover over the grid. -->
+			<div id="week-crosshair" class="hidden pointer-events-none absolute left-0 right-0 z-20">
+				<div class="border-t border-huginn-accent/60"></div>
+				<span id="week-crosshair-label" class="absolute -top-[5px] left-0 w-12 pr-1 text-right text-[9px] leading-none text-huginn-accent bg-huginn-bg"></span>
+			</div>
 		</div>
 		<div id="modal-root"></div>
 	</div>
@@ -300,11 +391,93 @@ func occurrenceEditURL(o service.Occurrence) string {
 }
 
 // calendarColorCSS emits CSS that maps each [data-event-cal] to the calendar's hex color.
+func isWeekend(t time.Time) bool {
+	wd := t.Weekday()
+	return wd == time.Saturday || wd == time.Sunday
+}
+
+func isWeekendName(short string) bool {
+	return short == "Sat" || short == "Sun"
+}
+
+// todayWeekdayShort returns the short weekday name (e.g. "Tue") of the grid's
+// today cell, or "" when today isn't in the visible grid.
+func todayWeekdayShort(weeks []MonthWeek) string {
+	for _, w := range weeks {
+		for _, d := range w.Days {
+			if d.IsToday {
+				return d.Date.Format("Mon")
+			}
+		}
+	}
+	return ""
+}
+
+// maxCellRows is the vertical event budget per month-view day cell: span-bar
+// lanes plus single-day chips. Beyond it, extra chips collapse into "+N more".
+// ponytail: fixed heuristic tuned for desktop; a JS height-measure would adapt
+// per viewport, add that only if cells visibly overflow on small screens.
+const maxCellRows = 5
+
+// chipBudget is how many single-day chips a cell shows before the "+N more" row,
+// shrinking as the week's bars take more lanes.
+func chipBudget(lanes int) int {
+	rows := maxCellRows - lanes
+	if rows < 1 {
+		rows = 1
+	}
+	return rows
+}
+
+// cellVisibleChips returns the single-day events to render in the cell.
+func cellVisibleChips(events []service.Occurrence, lanes int) []service.Occurrence {
+	rows := chipBudget(lanes)
+	if len(events) <= rows {
+		return events
+	}
+	return events[:rows-1] // leave one row for the "+N more" indicator
+}
+
+// cellMoreCount returns how many events are hidden behind "+N more" (0 = none).
+func cellMoreCount(events []service.Occurrence, lanes int) int {
+	rows := chipBudget(lanes)
+	if len(events) <= rows {
+		return 0
+	}
+	return len(events) - (rows - 1)
+}
+
+func mondayOf(t time.Time) time.Time {
+	wd := int(t.Weekday())
+	if wd == 0 {
+		wd = 7
+	}
+	return t.AddDate(0, 0, -(wd - 1))
+}
+
+func weekGridURLForDate(t time.Time) string { return "/week/grid?week=" + mondayOf(t).Format("2006-01-02") }
+func weekURLForDate(t time.Time) string     { return "/week?week=" + mondayOf(t).Format("2006-01-02") }
+
+// spanBarStyle positions a multi-day bar: left/width from its column span,
+// top from its lane (offset by topBase), with squared edges where it continues
+// into an adjacent week.
+func spanBarStyle(b SpanBar, topBase int) string {
+	s := fmt.Sprintf("left:calc(100%%/7*%d + 2px);width:calc(100%%/7*%d - 4px);top:%dpx;height:20px;",
+		b.StartCol, b.Span(), topBase+b.Lane*22)
+	if b.ClipLeft {
+		s += "border-top-left-radius:0;border-bottom-left-radius:0;border-left-width:0;"
+	}
+	if b.ClipRight {
+		s += "border-top-right-radius:0;border-bottom-right-radius:0;"
+	}
+	return s
+}
+
 func calendarColorCSS(calendars []*repo.Calendar) string {
 	var sb strings.Builder
 	for _, cal := range calendars {
 		c := cal.Color
-		fmt.Fprintf(&sb, `[data-event-cal="%s"]{background-color:%s26;color:%s}`, cal.ID, c, c)
+		fmt.Fprintf(&sb, `[data-event-cal="%s"]{background-color:%s26;color:%s;border-left:2px solid %s}`, cal.ID, c, c, c)
 		fmt.Fprintf(&sb, `[data-event-cal="%s"]:hover{background-color:%s40}`, cal.ID, c)
 	}
 	return sb.String()

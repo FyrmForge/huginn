@@ -54,7 +54,7 @@ func (h *Handler) authUser(c echo.Context) (*repo.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	if username != "" && username != user.ID && username != user.Email {
+	if username != "" && username != user.ID && !strings.EqualFold(username, user.Email) {
 		return nil, fmt.Errorf("username mismatch")
 	}
 	return user, nil
