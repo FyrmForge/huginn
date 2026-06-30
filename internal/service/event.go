@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	rrule "github.com/teambition/rrule-go"
 
+	"github.com/FyrmForge/hamr/pkg/websocket"
+
 	"github.com/FyrmForge/huginn/internal/repo"
 )
 
@@ -44,11 +46,54 @@ func (o *Occurrence) EventID() string { return o.MasterEvent.ID }
 func (o *Occurrence) IsRecurring() bool { return !o.RecurrenceID.IsZero() }
 
 type EventService struct {
-	store repo.Store
+	store   repo.Store
+	emitter *websocket.Emitter
 }
 
 func NewEventService(store repo.Store) *EventService {
 	return &EventService{store: store}
+}
+
+// SetEmitter wires the WebSocket emitter used to push live calendar updates.
+// Optional: when unset (e.g. in tests) notifications are no-ops.
+func (s *EventService) SetEmitter(e *websocket.Emitter) { s.emitter = e }
+
+// notifyCalendarChange pushes a refresh trigger to every user who can see the
+// calendar, so their open calendar views re-fetch. Best-effort: errors are
+// swallowed since the mutation itself already succeeded.
+func (s *EventService) notifyCalendarChange(ctx context.Context, calendarID string) {
+	if s.emitter == nil {
+		return
+	}
+	// Recipients = owner + any share members, deduped. The owner is taken from
+	// the calendar row directly: seeded calendars may have no calendar_members
+	// row for the owner, so ListCalendarMembers alone can miss them.
+	recipients := map[string]bool{}
+	if cal, err := s.store.GetCalendarByID(ctx, calendarID); err == nil && cal != nil {
+		recipients[cal.OwnerID] = true
+	}
+	if members, err := s.store.ListCalendarMembers(ctx, calendarID); err == nil {
+		for _, m := range members {
+			recipients[m.UserID] = true
+		}
+	}
+	// Reuse the existing client refresh convention: the calendar grids listen
+	// for "huginn:refresh-calendar from:body" (see calendar.templ) and re-fetch.
+	ev := websocket.NewTriggerEvent("huginn:refresh-calendar", "body", "huginn:refresh-calendar")
+	for uid := range recipients {
+		s.emitter.ToSubject(uid, ev)
+	}
+}
+
+// notifyEventChange resolves the calendar for an event ID and notifies its
+// members. Used by paths that only have the event/master ID at hand.
+func (s *EventService) notifyEventChange(ctx context.Context, eventID string) {
+	if s.emitter == nil {
+		return
+	}
+	if e, err := s.store.GetEventByID(ctx, eventID); err == nil && e != nil {
+		s.notifyCalendarChange(ctx, e.CalendarID)
+	}
 }
 
 func (s *EventService) GetByID(ctx context.Context, id string) (*repo.Event, error) {
@@ -282,6 +327,7 @@ func (s *EventService) Create(ctx context.Context, userID, calendarID string, in
 	if err := s.store.CreateEvent(ctx, e); err != nil {
 		return nil, fmt.Errorf("create event: %w", err)
 	}
+	s.notifyCalendarChange(ctx, calendarID)
 	return e, nil
 }
 
@@ -307,7 +353,11 @@ func (s *EventService) Update(ctx context.Context, userID, eventID string, in Ev
 	e.RRule = in.RRule
 	e.ETag = uuid.New().String()
 	e.UpdatedBy = &userID
-	return s.store.UpdateEvent(ctx, e)
+	if err := s.store.UpdateEvent(ctx, e); err != nil {
+		return err
+	}
+	s.notifyCalendarChange(ctx, e.CalendarID)
+	return nil
 }
 
 // UpdateOccurrence saves an override for a single occurrence of a recurring series.
@@ -343,7 +393,11 @@ func (s *EventService) UpdateOccurrence(ctx context.Context, userID, masterID st
 	if err := s.store.UpdateEvent(ctx, master); err != nil {
 		return err
 	}
-	return s.store.UpsertEventException(ctx, ex)
+	if err := s.store.UpsertEventException(ctx, ex); err != nil {
+		return err
+	}
+	s.notifyCalendarChange(ctx, master.CalendarID)
+	return nil
 }
 
 // DeleteOccurrence cancels a single occurrence by marking it deleted in event_exceptions.
@@ -377,7 +431,11 @@ func (s *EventService) DeleteOccurrence(ctx context.Context, userID, masterID st
 	if err := s.store.UpdateEvent(ctx, master); err != nil {
 		return err
 	}
-	return s.store.UpsertEventException(ctx, ex)
+	if err := s.store.UpsertEventException(ctx, ex); err != nil {
+		return err
+	}
+	s.notifyCalendarChange(ctx, master.CalendarID)
+	return nil
 }
 
 // UpdateThisAndFuture splits the recurring series at recurrenceID:
@@ -431,7 +489,11 @@ func (s *EventService) UpdateThisAndFuture(ctx context.Context, userID, masterID
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	return s.store.CreateEvent(ctx, newMaster)
+	if err := s.store.CreateEvent(ctx, newMaster); err != nil {
+		return err
+	}
+	s.notifyCalendarChange(ctx, master.CalendarID)
+	return nil
 }
 
 // appendUntil appends or replaces UNTIL in an RRULE string.
@@ -466,7 +528,11 @@ func (s *EventService) SetExdatesRdates(ctx context.Context, eventID, exdates, r
 	}
 	e.Exdates = exdates
 	e.Rdates = rdates
-	return s.store.UpdateEvent(ctx, e)
+	if err := s.store.UpdateEvent(ctx, e); err != nil {
+		return err
+	}
+	s.notifyCalendarChange(ctx, e.CalendarID)
+	return nil
 }
 
 // UpsertCalDAVException stores or updates a per-occurrence exception received via CalDAV PUT.
@@ -491,7 +557,11 @@ func (s *EventService) UpsertCalDAVException(ctx context.Context, userID, master
 	if isDeleted {
 		ex.Status = "cancelled"
 	}
-	return s.store.UpsertEventException(ctx, ex)
+	if err := s.store.UpsertEventException(ctx, ex); err != nil {
+		return err
+	}
+	s.notifyEventChange(ctx, masterID)
+	return nil
 }
 
 // DeleteThisAndFuture truncates a recurring series at recurrenceID by setting UNTIL.
@@ -507,7 +577,11 @@ func (s *EventService) DeleteThisAndFuture(ctx context.Context, userID, masterID
 	master.RRule = appendUntil(master.RRule, recurrenceID.Add(-time.Second).UTC())
 	master.ETag = uuid.New().String()
 	master.UpdatedBy = &userID
-	return s.store.UpdateEvent(ctx, master)
+	if err := s.store.UpdateEvent(ctx, master); err != nil {
+		return err
+	}
+	s.notifyCalendarChange(ctx, master.CalendarID)
+	return nil
 }
 
 // Delete soft-deletes a native event (all occurrences).
@@ -522,7 +596,11 @@ func (s *EventService) Delete(ctx context.Context, userID, eventID string) error
 	if e.Ownership == "imported_readonly" {
 		return ErrEventReadOnly
 	}
-	return s.store.DeleteEvent(ctx, eventID)
+	if err := s.store.DeleteEvent(ctx, eventID); err != nil {
+		return err
+	}
+	s.notifyCalendarChange(ctx, e.CalendarID)
+	return nil
 }
 
 // EventInput holds the editable fields for create/update.

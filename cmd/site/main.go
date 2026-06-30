@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
@@ -178,8 +179,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	// WebSocket hub.
-	hub := websocket.NewHub(websocket.WithLogger(log))
+	// WebSocket hub. Subject = authenticated user, resolved from the session
+	// cookie at upgrade time (the /ws route runs outside the auth middleware).
+	hub := websocket.NewHub(
+		websocket.WithLogger(log),
+		websocket.WithSubjectIDFunc(func(r *http.Request) string {
+			cookie, err := r.Cookie(sessionManager.CookieName())
+			if err != nil {
+				return ""
+			}
+			sess, err := sessionManager.ValidateSession(r.Context(), cookie.Value)
+			if err != nil || sess == nil {
+				return ""
+			}
+			return sess.SubjectID
+		}),
+	)
+	eventService.SetEmitter(websocket.NewEmitter(hub))
 
 	api.RegisterRoutes(srv, &api.Deps{
 		Store: store,

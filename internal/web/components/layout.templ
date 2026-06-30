@@ -64,9 +64,39 @@ templ AppLayout(c echo.Context, title string) {
 		<script src={ StaticURL("js/htmx.min.js") }></script>
 		<script src={ StaticURL("js/main.js") }></script>
 		<script src={ StaticURL("js/nav.js") }></script>
+		<script src={ StaticURL("js/ws.js") }></script>
 		@htmxInit()
+		@wsInit()
 	</body>
 	</html>
+}
+
+// wsInit opens the live WebSocket and applies server-pushed events: a trigger
+// event fires an htmx event (debounced so a burst — e.g. bulk sync — collapses
+// into one refetch); an HTML event swaps into its target.
+templ wsInit() {
+	<script>
+		(function () {
+			if (!window.HamrWS || typeof htmx === 'undefined') return;
+			var ws = new HamrWS('/ws');
+			var timers = {};
+			ws.onmessage = function (e) {
+				var ev;
+				try { ev = JSON.parse(e.data); } catch (_) { return; }
+				if (ev.trigger) {
+					var target = ev.target || 'body';
+					var key = target + '|' + ev.trigger;
+					clearTimeout(timers[key]);
+					timers[key] = setTimeout(function () {
+						var el = document.querySelector(target) || document.body;
+						htmx.trigger(el, ev.trigger);
+					}, 150);
+				} else if (ev.html && ev.target) {
+					htmx.swap(ev.target, ev.html, { swapStyle: ev.swap || 'innerHTML' });
+				}
+			};
+		})();
+	</script>
 }
 
 templ TopBar(c echo.Context) {

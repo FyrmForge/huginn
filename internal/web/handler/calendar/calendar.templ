@@ -21,15 +21,37 @@ templ monthPage(c echo.Context, d monthViewData) {
 				@monthGrid(d.Weeks, d.Year, d.Month, calendarMap(d.Calendars))
 			</div>
 		</div>
+		<!-- Modal root lives outside #cal-grid so a grid refresh never wipes an open modal. -->
+		<div id="modal-root"></div>
 	}
+}
+
+templ newEventFab() {
+	<button
+		class="md:hidden fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full bg-huginn-accent text-white shadow-lg shadow-black/40 flex items-center justify-center text-3xl leading-none"
+		hx-get="/events/new"
+		hx-target="#modal-root"
+		hx-swap="innerHTML"
+		aria-label="new event"
+	>+</button>
+}
+
+templ calDrawerToggle() {
+	<button type="button" class="btn-ghost md:hidden" data-cal-drawer-open aria-label="show calendars">
+		<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M4 8h8M6 12h4"></path></svg>
+	</button>
 }
 
 templ calendarSidebar(c echo.Context, calendars []*repo.Calendar) {
 	@templ.Raw("<style>" + calendarColorCSS(calendars) + "</style>")
-	<aside class="w-48 shrink-0 border-r border-huginn-line bg-huginn-surface flex flex-col">
+	<div id="cal-overlay" hidden class="fixed inset-0 z-40 bg-black/60 md:hidden" data-cal-drawer-close></div>
+	<aside id="cal-sidebar" class="fixed md:static top-0 left-0 z-50 md:z-auto h-full md:h-auto w-56 md:w-48 shrink-0 border-r border-huginn-line bg-huginn-surface flex flex-col -translate-x-full md:translate-x-0 transition-transform duration-200 ease-out">
 		<div class="p-3 border-b border-huginn-line flex items-center justify-between">
 			<span class="text-[10px] uppercase tracking-widest text-huginn-mute">calendars</span>
-			<a href="/calendars/new" class="btn-ghost text-huginn-accent" title="New calendar">+</a>
+			<div class="flex items-center gap-1">
+				<a href="/calendars/new" class="btn-ghost text-huginn-accent" title="New calendar">+</a>
+				<button type="button" class="btn-ghost text-huginn-mute md:hidden" data-cal-drawer-close aria-label="close calendars">×</button>
+			</div>
 		</div>
 		<div class="flex-1 overflow-y-auto py-2">
 			for _, cal := range calendars {
@@ -62,6 +84,7 @@ templ monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*
 		<!-- Header: nav + month label -->
 		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
 			<div class="flex items-center gap-2">
+				@calDrawerToggle()
 				<a
 					href={ templ.URL(prevMonthURL(year, month)) }
 					hx-get={ prevMonthURL(year, month) }
@@ -96,13 +119,14 @@ templ monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*
 				<a href="/" class="chip">month</a>
 				<a href="/week" class="btn-ghost">week</a>
 				<button
-					class="btn-primary ml-2"
+					class="btn-primary ml-2 hidden md:inline-flex"
 					hx-get="/events/new"
 					hx-target="#modal-root"
 					hx-swap="innerHTML"
 				>+ event</button>
 			</div>
 		</div>
+		@newEventFab()
 		<!-- Day-of-week header -->
 		<div class="grid grid-cols-7 border-b border-huginn-line shrink-0">
 			for _, wd := range weekdays {
@@ -124,17 +148,17 @@ templ monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*
 				@monthWeekRow(week, cals)
 			}
 		</div>
+		<!-- Refresh grid when an event is saved/deleted or pushed over WS. Inside
+		     #cal-grid so the outerHTML swap replaces it (no duplicate) and its
+		     hx-get tracks the displayed month. -->
+		<div
+			id="cal-refresh-listener"
+			hx-get={ fmt.Sprintf("/calendar/grid?year=%d&month=%d", year, int(month)) }
+			hx-target="#cal-grid"
+			hx-swap="outerHTML"
+			hx-trigger="huginn:refresh-calendar from:body"
+		></div>
 	</div>
-	<!-- Modal root for event create/edit -->
-	<div id="modal-root"></div>
-	<!-- Refresh grid when an event is saved/deleted. -->
-	<div
-		id="cal-refresh-listener"
-		hx-get={ fmt.Sprintf("/calendar/grid?year=%d&month=%d", year, int(month)) }
-		hx-target="#cal-grid"
-		hx-swap="outerHTML"
-		hx-trigger="huginn:refresh-calendar from:body"
-	></div>
 }
 
 // monthWeekRow renders one week: a 7-column grid of day cells plus the
@@ -223,6 +247,8 @@ templ weekPage(c echo.Context, d weekViewData) {
 				@weekGrid(d.Week, d.WeekStart, calendarMap(d.Calendars))
 			</div>
 		</div>
+		<!-- Modal root lives outside #week-grid so a grid refresh never wipes an open modal. -->
+		<div id="modal-root"></div>
 	}
 }
 
@@ -231,6 +257,7 @@ templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calenda
 		<!-- Header: nav + view switcher -->
 		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
 			<div class="flex items-center gap-2">
+				@calDrawerToggle()
 				<a
 					href={ templ.URL(prevWeekURL(weekStart)) }
 					hx-get={ prevWeekURL(weekStart) }
@@ -238,7 +265,7 @@ templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calenda
 					hx-swap="outerHTML"
 					class="btn-ghost"
 				>‹</a>
-				<div class="relative w-48 text-center">
+				<div class="relative w-40 md:w-48 text-center">
 					<span class="text-xs font-medium text-huginn-fg cursor-pointer hover:text-huginn-accent">{ weekStart.Format("Jan 2") } – { weekStart.AddDate(0, 0, 6).Format("Jan 2, 2006") }</span>
 					<input
 						type="date"
@@ -265,16 +292,17 @@ templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calenda
 				<a href="/" class="btn-ghost">month</a>
 				<a href="/week" class="chip">week</a>
 				<button
-					class="btn-primary ml-2"
+					class="btn-primary ml-2 hidden md:inline-flex"
 					hx-get="/events/new"
 					hx-target="#modal-root"
 					hx-swap="innerHTML"
 				>+ event</button>
 			</div>
 		</div>
+		@newEventFab()
 		<!-- Day header row -->
 		<div class="flex shrink-0 border-b border-huginn-line">
-			<div class="w-12 shrink-0"></div>
+			<div class="w-9 shrink-0"></div>
 			for _, day := range week.Days {
 				<div class={
 					"flex-1 text-center py-1 border-l border-huginn-line/50",
@@ -293,7 +321,7 @@ templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calenda
 		<!-- All-day / multi-day span bars -->
 		if week.Lanes > 0 {
 			<div class="flex shrink-0 border-b border-huginn-line">
-				<div class="w-12 shrink-0 flex items-start justify-end pr-2 pt-1">
+				<div class="w-9 shrink-0 flex items-start justify-end pr-2 pt-1">
 					<span class="text-[9px] text-huginn-mute">all day</span>
 				</div>
 				<div class="flex-1 relative" style={ fmt.Sprintf("height:%dpx", week.Lanes*22+4) }>
@@ -313,9 +341,9 @@ templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calenda
 			</div>
 		}
 		<!-- Scrollable time grid -->
-		<div class="relative flex flex-1 overflow-y-auto" id="week-time-grid">
+		<div class="relative flex flex-1 overflow-x-hidden overflow-y-auto" id="week-time-grid">
 			<!-- Hour labels (drag this gutter vertically to expand/compress the timeline) -->
-			<div id="week-hour-gutter" class="w-12 shrink-0 relative cursor-ns-resize select-none" style="height: calc(var(--ppm,1) * 1440px);" title="Drag to expand/compress">
+			<div id="week-hour-gutter" class="w-9 shrink-0 relative cursor-ns-resize select-none" style="height: calc(var(--ppm,1) * 1440px);" title="Drag to expand/compress">
 				for _, hr := range weekHours() {
 					if hr > 0 {
 						<div
@@ -346,7 +374,7 @@ templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calenda
 							data-event-cal={ we.Occ.CalendarID() }
 							{ evCardAttrs(we.Occ, cals)... }
 							style={ fmt.Sprintf("position: absolute; top: calc(var(--ppm,1) * %dpx); height: calc(var(--ppm,1) * %dpx); left: 2px; right: 2px;", we.TopPx, we.HeightPx) }
-							class="w-full text-left text-[10px] px-1.5 py-0.5 rounded-sm overflow-hidden transition-colors"
+							class="text-left text-[10px] leading-tight px-1.5 py-0.5 rounded-sm overflow-hidden transition-colors"
 							hx-get={ occurrenceEditURL(we.Occ) }
 							hx-target="#modal-root"
 							hx-swap="innerHTML"
@@ -358,10 +386,18 @@ templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calenda
 			<!-- Time crosshair: positioned by main.js on hover over the grid. -->
 			<div id="week-crosshair" class="hidden pointer-events-none absolute left-0 right-0 z-20">
 				<div class="border-t border-huginn-accent/60"></div>
-				<span id="week-crosshair-label" class="absolute -top-[5px] left-0 w-12 pr-1 text-right text-[9px] leading-none text-huginn-accent bg-huginn-bg"></span>
+				<span id="week-crosshair-label" class="absolute -top-[5px] left-0 w-9 pr-1 text-right text-[9px] leading-none text-huginn-accent bg-huginn-bg"></span>
 			</div>
 		</div>
-		<div id="modal-root"></div>
+		<!-- Refresh week grid when saved/deleted or pushed over WS. Inside
+		     #week-grid so the swap replaces it and its hx-get tracks the week. -->
+		<div
+			id="week-refresh-listener"
+			hx-get={ fmt.Sprintf("/week/grid?week=%s", weekStart.Format("2006-01-02")) }
+			hx-target="#week-grid"
+			hx-swap="outerHTML"
+			hx-trigger="huginn:refresh-calendar from:body"
+		></div>
 	</div>
 }
 
