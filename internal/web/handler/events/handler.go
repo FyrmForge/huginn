@@ -120,7 +120,7 @@ func (h *handler) Create(c echo.Context) error {
 		return respond.HTML(c, http.StatusUnprocessableEntity, eventModal(c, f, calendars, map[string]string{"general": "Invalid date/time"}, "", "", ""))
 	}
 
-	_, err = h.eventService.Create(c.Request().Context(), user.ID, f.CalendarID, in)
+	_, err = h.eventService.Create(service.WithActor(c.Request().Context(), user.ID), user.ID, f.CalendarID, in)
 	if err != nil {
 		calendars, _ := h.calendarService.ListEditableForUser(c.Request().Context(), user.ID)
 		return respond.HTML(c, http.StatusUnprocessableEntity, eventModal(c, f, calendars, map[string]string{"general": "Failed to save event"}, "", "", ""))
@@ -294,16 +294,17 @@ func (h *handler) Update(c echo.Context) error {
 		return respond.HTML(c, http.StatusUnprocessableEntity, eventModal(c, f, calendars, map[string]string{"general": "Invalid date/time"}, c.Param("id"), rid, scope))
 	}
 
+	ctx := service.WithActor(c.Request().Context(), user.ID)
 	var updateErr error
 	switch {
 	case scope == "this" && rid != "":
 		recurrenceID, _ := time.Parse(time.RFC3339, rid)
-		updateErr = h.eventService.UpdateOccurrence(c.Request().Context(), user.ID, c.Param("id"), recurrenceID, in)
+		updateErr = h.eventService.UpdateOccurrence(ctx, user.ID, c.Param("id"), recurrenceID, in)
 	case scope == "future" && rid != "":
 		recurrenceID, _ := time.Parse(time.RFC3339, rid)
-		updateErr = h.eventService.UpdateThisAndFuture(c.Request().Context(), user.ID, c.Param("id"), recurrenceID, in)
+		updateErr = h.eventService.UpdateThisAndFuture(ctx, user.ID, c.Param("id"), recurrenceID, in)
 	default:
-		updateErr = h.eventService.Update(c.Request().Context(), user.ID, c.Param("id"), in)
+		updateErr = h.eventService.Update(ctx, user.ID, c.Param("id"), in)
 	}
 
 	if updateErr != nil {
@@ -337,16 +338,17 @@ func (h *handler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "view-only access")
 	}
 
+	ctx := service.WithActor(c.Request().Context(), user.ID)
 	var deleteErr error
 	switch {
 	case scope == "this" && rid != "":
 		recurrenceID, _ := time.Parse(time.RFC3339, rid)
-		deleteErr = h.eventService.DeleteOccurrence(c.Request().Context(), user.ID, c.Param("id"), recurrenceID)
+		deleteErr = h.eventService.DeleteOccurrence(ctx, user.ID, c.Param("id"), recurrenceID)
 	case scope == "future" && rid != "":
 		recurrenceID, _ := time.Parse(time.RFC3339, rid)
-		deleteErr = h.eventService.DeleteThisAndFuture(c.Request().Context(), user.ID, c.Param("id"), recurrenceID)
+		deleteErr = h.eventService.DeleteThisAndFuture(ctx, user.ID, c.Param("id"), recurrenceID)
 	default:
-		deleteErr = h.eventService.Delete(c.Request().Context(), user.ID, c.Param("id"))
+		deleteErr = h.eventService.Delete(ctx, user.ID, c.Param("id"))
 	}
 
 	if deleteErr != nil {

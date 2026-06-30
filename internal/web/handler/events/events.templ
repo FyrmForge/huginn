@@ -10,8 +10,8 @@ import (
 templ eventModal(c echo.Context, f EventForm, calendars []*repo.Calendar, errors map[string]string, eventID string, rid string, scope string) {
 	<div
 		id="modal-backdrop"
+		data-modal-backdrop
 		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
-		hx-on:click="if(event.target===this) htmx.ajax('GET','/events/close',{target:'#modal-root',swap:'innerHTML'})"
 	>
 		<div class="bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col max-h-[90vh] overflow-y-auto">
 			<div class="flex items-center justify-between px-4 py-3 border-b border-huginn-line sticky top-0 bg-huginn-surface">
@@ -382,8 +382,8 @@ templ modalClosed() {}
 templ eventReadOnlyModal(title, calName, startFmt, endFmt, description, location, createdBy string) {
 	<div
 		id="modal-backdrop"
+		data-modal-backdrop
 		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
-		hx-on:click="if(event.target===this) htmx.ajax('GET','/events/close',{target:'#modal-root',swap:'innerHTML'})"
 	>
 		<div class="bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col">
 			<div class="flex items-center justify-between px-4 py-3 border-b border-huginn-line">

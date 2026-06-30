@@ -30,3 +30,15 @@
     if (e.target.closest('[data-cal-drawer-close]')) return close();
   });
 })();
+
+// Modal backdrop click-to-close. The modal is htmx-swapped into #modal-root, so
+// the handler is delegated on document. Only a click on the backdrop itself
+// (not its children) closes — matches the old hx-on:click, without needing
+// 'unsafe-eval' in the CSP.
+(function () {
+  document.addEventListener('click', function (e) {
+    if (e.target.matches('[data-modal-backdrop]')) {
+      htmx.ajax('GET', '/events/close', { target: '#modal-root', swap: 'innerHTML' });
+    }
+  });
+})();

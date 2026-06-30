@@ -36,7 +36,7 @@ func eventModal(c echo.Context, f EventForm, calendars []*repo.Calendar, errors 
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"modal-backdrop\" class=\"fixed inset-0 z-50 bg-black/70 flex items-center justify-center\" hx-on:click=\"if(event.target===this) htmx.ajax('GET','/events/close',{target:'#modal-root',swap:'innerHTML'})\"><div class=\"bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col max-h-[90vh] overflow-y-auto\"><div class=\"flex items-center justify-between px-4 py-3 border-b border-huginn-line sticky top-0 bg-huginn-surface\"><span class=\"text-xs font-medium text-huginn-fg uppercase tracking-wider\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"modal-backdrop\" data-modal-backdrop class=\"fixed inset-0 z-50 bg-black/70 flex items-center justify-center\"><div class=\"bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col max-h-[90vh] overflow-y-auto\"><div class=\"flex items-center justify-between px-4 py-3 border-b border-huginn-line sticky top-0 bg-huginn-surface\"><span class=\"text-xs font-medium text-huginn-fg uppercase tracking-wider\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1221,7 +1221,7 @@ func eventReadOnlyModal(title, calName, startFmt, endFmt, description, location,
 			templ_7745c5c3_Var53 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "<div id=\"modal-backdrop\" class=\"fixed inset-0 z-50 bg-black/70 flex items-center justify-center\" hx-on:click=\"if(event.target===this) htmx.ajax('GET','/events/close',{target:'#modal-root',swap:'innerHTML'})\"><div class=\"bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col\"><div class=\"flex items-center justify-between px-4 py-3 border-b border-huginn-line\"><span class=\"text-xs font-medium text-huginn-fg uppercase tracking-wider\">event</span> <button class=\"btn-ghost text-huginn-mute\" hx-get=\"/events/close\" hx-target=\"#modal-root\" hx-swap=\"innerHTML\">×</button></div><div class=\"p-4 flex flex-col gap-3 text-xs\"><div class=\"text-sm font-medium text-huginn-fg\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "<div id=\"modal-backdrop\" data-modal-backdrop class=\"fixed inset-0 z-50 bg-black/70 flex items-center justify-center\"><div class=\"bg-huginn-surface border border-huginn-line w-full max-w-md mx-4 flex flex-col\"><div class=\"flex items-center justify-between px-4 py-3 border-b border-huginn-line\"><span class=\"text-xs font-medium text-huginn-fg uppercase tracking-wider\">event</span> <button class=\"btn-ghost text-huginn-mute\" hx-get=\"/events/close\" hx-target=\"#modal-root\" hx-swap=\"innerHTML\">×</button></div><div class=\"p-4 flex flex-col gap-3 text-xs\"><div class=\"text-sm font-medium text-huginn-fg\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

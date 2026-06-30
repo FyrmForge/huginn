@@ -41,7 +41,7 @@ templ registerForm(c echo.Context, f RegisterForm, errors map[string]string) {
 				value={ f.Name }
 				class="input"
 				hx-post="/register/validate/name"
-				hx-trigger="blur, input[this.closest('div').querySelector('[data-has-error=true]')] delay:300ms"
+				hx-trigger="blur, input changed delay:300ms"
 				hx-swap="none"
 			/>
 			@form.FieldError("name", form.GetError(errors, "name"))
@@ -55,7 +55,7 @@ templ registerForm(c echo.Context, f RegisterForm, errors map[string]string) {
 				value={ f.Email }
 				class="input"
 				hx-post="/register/validate/email"
-				hx-trigger="blur, input[this.closest('div').querySelector('[data-has-error=true]')] delay:300ms"
+				hx-trigger="blur, input changed delay:300ms"
 				hx-swap="none"
 			/>
 			@form.FieldError("email", form.GetError(errors, "email"))
@@ -68,7 +68,7 @@ templ registerForm(c echo.Context, f RegisterForm, errors map[string]string) {
 				name="password"
 				class="input"
 				hx-post="/register/validate/password"
-				hx-trigger="blur, input[this.closest('div').querySelector('[data-has-error=true]')] delay:300ms"
+				hx-trigger="blur, input changed delay:300ms"
 				hx-swap="none"
 			/>
 			@form.FieldError("password", form.GetError(errors, "password"))

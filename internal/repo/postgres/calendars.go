@@ -107,6 +107,18 @@ func (s *Store) ListCalendarMembers(ctx context.Context, calendarID string) ([]*
 	return members, err
 }
 
+// CalendarAudience returns the deduped user IDs that can see a calendar: the
+// owner (from the calendar row — UI-created and default calendars have no owner
+// membership row) plus every share member. One query for live-refresh fan-out.
+func (s *Store) CalendarAudience(ctx context.Context, calendarID string) ([]string, error) {
+	var ids []string
+	err := s.db.SelectContext(ctx, &ids,
+		`SELECT owner_id FROM calendars WHERE id = $1
+		 UNION
+		 SELECT user_id FROM calendar_members WHERE calendar_id = $1`, calendarID)
+	return ids, err
+}
+
 func (s *Store) GetCalendarMember(ctx context.Context, calendarID, userID string) (*repo.CalendarMember, error) {
 	var m repo.CalendarMember
 	err := s.db.GetContext(ctx, &m,

@@ -60,7 +60,7 @@ func RegisterRoutes(srv *server.Server, deps *Deps) {
 	e.GET("/ws", deps.Hub.Handler())
 
 	// Content Security Policy.
-	csp := "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+	csp := "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
 	csp += "; connect-src 'self' ws: wss:"
 	csp += "; img-src 'self' data:"
 

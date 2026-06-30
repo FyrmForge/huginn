@@ -666,7 +666,7 @@ func htmxInit() templ.Component {
 			templ_7745c5c3_Var30 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<script>\n\t\thtmx.config.responseHandling = [\n\t\t\t{code:\"204\", swap: false},\n\t\t\t{code:\"[23]..\", swap: true},\n\t\t\t{code:\"400\", swap: true, error: false},\n\t\t\t{code:\"422\", swap: true, error: false},\n\t\t\t{code:\"429\", swap: true, error: false},\n\t\t\t{code:\"[45]..\", swap: false, error: true}\n\t\t];\n\t\tdocument.addEventListener('htmx:configRequest', function(evt) {\n\t\t\tvar csrfToken = document.querySelector('input[name=\"csrf_token\"]');\n\t\t\tif (csrfToken) evt.detail.headers['X-CSRF-Token'] = csrfToken.value;\n\t\t});\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<script>\n\t\t// No htmx feature relies on eval (no hx-on/js: filters); refuse it so the\n\t\t// CSP can omit 'unsafe-eval' without htmx logging blocked-eval errors.\n\t\thtmx.config.allowEval = false;\n\t\thtmx.config.responseHandling = [\n\t\t\t{code:\"204\", swap: false},\n\t\t\t{code:\"[23]..\", swap: true},\n\t\t\t{code:\"400\", swap: true, error: false},\n\t\t\t{code:\"422\", swap: true, error: false},\n\t\t\t{code:\"429\", swap: true, error: false},\n\t\t\t{code:\"[45]..\", swap: false, error: true}\n\t\t];\n\t\tdocument.addEventListener('htmx:configRequest', function(evt) {\n\t\t\tvar csrfToken = document.querySelector('input[name=\"csrf_token\"]');\n\t\t\tif (csrfToken) evt.detail.headers['X-CSRF-Token'] = csrfToken.value;\n\t\t});\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -704,7 +704,7 @@ func CSRFInput(c echo.Context) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(tok)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/components/layout.templ`, Line: 230, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/components/layout.templ`, Line: 233, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {

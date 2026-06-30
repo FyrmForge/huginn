@@ -58,29 +58,65 @@ func NewEventService(store repo.Store) *EventService {
 // Optional: when unset (e.g. in tests) notifications are no-ops.
 func (s *EventService) SetEmitter(e *websocket.Emitter) { s.emitter = e }
 
+// ctxKey is the private type for context values this package attaches.
+type ctxKey int
+
+const (
+	ctxActor   ctxKey = iota // userID of a browser action, excluded from WS refresh
+	ctxNoNotify              // suppresses per-mutation WS refresh (bulk sync)
+)
+
+// WithActor marks ctx as a browser action by userID. That user is excluded from
+// the live WS refresh: their acting tab already refreshes via the HX-Trigger
+// response header, so the WS echo would only cause a redundant second refetch.
+// Non-browser callers (CalDAV, sync) leave it unset so the owner still gets pushed.
+func WithActor(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, ctxActor, userID)
+}
+
+func actorOf(ctx context.Context) string {
+	s, _ := ctx.Value(ctxActor).(string)
+	return s
+}
+
+// withoutNotify suppresses the per-mutation live refresh, for bulk callers
+// (sync) that emit a single refresh per calendar at the end via NotifyCalendar.
+func withoutNotify(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxNoNotify, true)
+}
+
+func notifyMuted(ctx context.Context) bool {
+	b, _ := ctx.Value(ctxNoNotify).(bool)
+	return b
+}
+
+// NotifyCalendar emits a single live-refresh trigger to a calendar's audience.
+// Exported for bulk paths (sync) that suppress per-mutation notifications and
+// fire once at the end.
+func (s *EventService) NotifyCalendar(ctx context.Context, calendarID string) {
+	s.notifyCalendarChange(ctx, calendarID)
+}
+
 // notifyCalendarChange pushes a refresh trigger to every user who can see the
-// calendar, so their open calendar views re-fetch. Best-effort: errors are
-// swallowed since the mutation itself already succeeded.
+// calendar (minus the acting browser user), so their open calendar views
+// re-fetch. Best-effort: errors are swallowed since the mutation already
+// succeeded.
 func (s *EventService) notifyCalendarChange(ctx context.Context, calendarID string) {
-	if s.emitter == nil {
+	if s.emitter == nil || notifyMuted(ctx) {
 		return
 	}
-	// Recipients = owner + any share members, deduped. The owner is taken from
-	// the calendar row directly: seeded calendars may have no calendar_members
-	// row for the owner, so ListCalendarMembers alone can miss them.
-	recipients := map[string]bool{}
-	if cal, err := s.store.GetCalendarByID(ctx, calendarID); err == nil && cal != nil {
-		recipients[cal.OwnerID] = true
+	recipients, err := s.store.CalendarAudience(ctx, calendarID)
+	if err != nil {
+		return
 	}
-	if members, err := s.store.ListCalendarMembers(ctx, calendarID); err == nil {
-		for _, m := range members {
-			recipients[m.UserID] = true
-		}
-	}
+	actor := actorOf(ctx)
 	// Reuse the existing client refresh convention: the calendar grids listen
 	// for "huginn:refresh-calendar from:body" (see calendar.templ) and re-fetch.
 	ev := websocket.NewTriggerEvent("huginn:refresh-calendar", "body", "huginn:refresh-calendar")
-	for uid := range recipients {
+	for _, uid := range recipients {
+		if uid == actor {
+			continue
+		}
 		s.emitter.ToSubject(uid, ev)
 	}
 }
@@ -88,7 +124,7 @@ func (s *EventService) notifyCalendarChange(ctx context.Context, calendarID stri
 // notifyEventChange resolves the calendar for an event ID and notifies its
 // members. Used by paths that only have the event/master ID at hand.
 func (s *EventService) notifyEventChange(ctx context.Context, eventID string) {
-	if s.emitter == nil {
+	if s.emitter == nil || notifyMuted(ctx) {
 		return
 	}
 	if e, err := s.store.GetEventByID(ctx, eventID); err == nil && e != nil {

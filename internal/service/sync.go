@@ -102,6 +102,11 @@ func (s *SyncService) Sync(ctx context.Context, userID, connectionID string) err
 		return s.markError(ctx, sc, err)
 	}
 
+	// Suppress per-event refresh pushes during the bulk import; fire one refresh
+	// per touched calendar at the end (the client debounces, but this also saves
+	// the per-event audience queries).
+	muteCtx := withoutNotify(ctx)
+	affected := map[string]bool{}
 	for _, cal := range cals {
 		huginnCal, err := s.ensureImportCalendar(ctx, userID, sc.Provider, cal)
 		if err != nil {
@@ -129,15 +134,20 @@ func (s *SyncService) Sync(ctx context.Context, userID, connectionID string) err
 				Timezone:    "UTC",
 				Ownership:   "imported_readonly",
 			}
-			created, _ := s.event.Create(ctx, userID, huginnCal.ID, in)
+			created, _ := s.event.Create(muteCtx, userID, huginnCal.ID, in)
 			if created != nil {
+				affected[huginnCal.ID] = true
 				if targetCalID, rerr := s.routing.Route(ctx, userID, created); rerr == nil && targetCalID != "" && targetCalID != huginnCal.ID {
 					in.Ownership = "imported_readonly"
-					_, _ = s.event.Create(ctx, userID, targetCalID, in)
-					_ = s.event.Delete(ctx, userID, created.ID)
+					_, _ = s.event.Create(muteCtx, userID, targetCalID, in)
+					_ = s.event.Delete(muteCtx, userID, created.ID)
+					affected[targetCalID] = true
 				}
 			}
 		}
+	}
+	for calID := range affected {
+		s.event.NotifyCalendar(ctx, calID)
 	}
 
 	now := time.Now()

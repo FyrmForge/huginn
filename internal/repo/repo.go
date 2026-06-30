@@ -40,6 +40,7 @@ type Store interface {
 	ListCalendarMembers(ctx context.Context, calendarID string) ([]*CalendarMember, error)
 	ListCalendarMembersWithUsers(ctx context.Context, calendarID string) ([]*CalendarMemberInfo, error)
 	GetCalendarMember(ctx context.Context, calendarID, userID string) (*CalendarMember, error)
+	CalendarAudience(ctx context.Context, calendarID string) ([]string, error)
 
 	// --- App passwords (CalDAV device tokens) ---
 	CreateAppPassword(ctx context.Context, ap *AppPassword) error

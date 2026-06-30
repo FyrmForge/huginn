@@ -8,6 +8,6 @@ var StaticManifest = map[string]string{
 	"js/htmx.min.js": "js/htmx.min.e209dda5c823.js",
 	"js/idiomorph.min.js": "js/idiomorph.min.cfbc37ff80a7.js",
 	"js/main.js": "js/main.9d69b3f565ac.js",
-	"js/nav.js": "js/nav.a7ef73400b57.js",
+	"js/nav.js": "js/nav.f4017a70cfcc.js",
 	"js/ws.js": "js/ws.a52c0d4e3a5a.js",
 }
