@@ -43,6 +43,13 @@ func NewOIDCService(ctx context.Context, cfg OIDCConfig) (*OIDCService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("oidc provider: %w", err)
 	}
+	// Providers gate a claim behind its scope, so to read the admin claim we
+	// must also request it as a scope (e.g. "groups" for Authelia, where the
+	// scope name matches the claim name).
+	scopes := []string{gooidc.ScopeOpenID, "profile", "email"}
+	if cfg.AdminClaim != "" {
+		scopes = append(scopes, cfg.AdminClaim)
+	}
 	return &OIDCService{
 		cfg:      cfg,
 		provider: provider,
@@ -52,7 +59,7 @@ func NewOIDCService(ctx context.Context, cfg OIDCConfig) (*OIDCService, error) {
 			ClientSecret: cfg.ClientSecret,
 			RedirectURL:  cfg.RedirectURL,
 			Endpoint:     provider.Endpoint(),
-			Scopes:       []string{gooidc.ScopeOpenID, "profile", "email"},
+			Scopes:       scopes,
 		},
 	}, nil
 }

@@ -91,7 +91,7 @@ func RegisterRoutes(srv *server.Server, deps *Deps) {
 	}
 
 	// Auth routes.
-	loginHandler := authlogin.NewHandler(deps.AuthService, deps.SessionManager, deps.DevAuthEmail)
+	loginHandler := authlogin.NewHandler(deps.AuthService, deps.SessionManager, deps.DevAuthEmail, deps.OIDCService != nil)
 	site.GET("/login", loginHandler.Page, bauth.RequireNotAuth())
 	site.POST("/login", loginHandler.Submit, bauth.RequireNotAuth())
 	site.POST("/login/validate/:field", loginHandler.FormRules.ValidationHandler("field"), bauth.RequireNotAuth())

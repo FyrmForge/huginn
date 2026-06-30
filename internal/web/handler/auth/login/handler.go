@@ -28,16 +28,18 @@ type handler struct {
 	authService    *service.AuthService
 	sessionManager *hamrauth.SessionManager
 	devAuthEmail   string
+	oidcEnabled    bool
 
 	FormRules validate.Form
 }
 
 // NewHandler creates a new login handler.
-func NewHandler(authService *service.AuthService, sm *hamrauth.SessionManager, devAuthEmail string) *handler {
+func NewHandler(authService *service.AuthService, sm *hamrauth.SessionManager, devAuthEmail string, oidcEnabled bool) *handler {
 	return &handler{
 		authService:    authService,
 		sessionManager: sm,
 		devAuthEmail:   devAuthEmail,
+		oidcEnabled:    oidcEnabled,
 		FormRules: validate.NewForm(
 			validate.WithOOBRenderer(form.OOBValidator),
 			validate.Field("email", validate.Required, validate.Email),
@@ -48,6 +50,11 @@ func NewHandler(authService *service.AuthService, sm *hamrauth.SessionManager, d
 
 // GET /login
 func (h *handler) Page(c echo.Context) error {
+	// When OIDC is the auth method, skip the local form and go straight to the
+	// provider. The dev bypass (if set) still wins so local dev works.
+	if h.devAuthEmail == "" && h.oidcEnabled {
+		return respond.Redirect(c, "/auth/oidc/login")
+	}
 	return respond.HTML(c, http.StatusOK, loginPage(c, h.devAuthEmail, LoginForm{}, nil))
 }
 

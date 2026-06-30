@@ -73,16 +73,13 @@ jobs:
         env:
           TAG: ${{ steps.ver.outputs.tag }}
 
-      # DISABLED until the server side (stackr secrets, huginn .env, Authelia
-      # client) is ready. Re-enable to make pushes auto-deploy. Until then this
-      # workflow only builds, publishes the image, and pushes the tag.
-      # - name: Trigger stackr deploy
-      #   run: |
-      #     curl --fail-with-body -sS -X POST "${STACKR_URL%/}/deploy" \
-      #       -H "Authorization: Bearer ${STACKR_TOKEN}" \
-      #       -H "Content-Type: application/json" \
-      #       -d "{\"stack\":\"huginn\",\"tag\":\"${TAG}\"}"
-      #   env:
-      #     STACKR_URL: ${{ secrets.STACKR_DEPLOY_URL }}
-      #     STACKR_TOKEN: ${{ secrets.STACKR_TOKEN }}
-      #     TAG: ${{ steps.ver.outputs.tag }}
+      - name: Trigger stackr deploy
+        run: |
+          curl --fail-with-body -sS -X POST "${STACKR_URL%/}/deploy" \
+            -H "Authorization: Bearer ${STACKR_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"stack\":\"huginn\",\"tag\":\"${TAG}\"}"
+        env:
+          STACKR_URL: ${{ vars.STACKR_DEPLOY_URL }}
+          STACKR_TOKEN: ${{ secrets.STACKR_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
