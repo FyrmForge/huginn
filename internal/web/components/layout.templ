@@ -118,7 +118,7 @@ templ TopBar(c echo.Context) {
 					@UserAvatar(u)
 					<span>{ u.Name }</span>
 				</a>
-				<form method="POST" action="/logout" class="inline">
+				<form hx-post="/logout" class="inline">
 					@CSRFInput(c)
 					<button type="submit" class="btn-ghost text-huginn-mute hover:text-huginn-danger">logout</button>
 				</form>

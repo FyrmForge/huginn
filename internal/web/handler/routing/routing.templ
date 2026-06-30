@@ -33,7 +33,7 @@ templ routingPage(c echo.Context, rules []*repo.RoutingRule, cals []*repo.Calend
 							</div>
 							<div class="flex gap-2 shrink-0">
 								<a href={ templ.URL("/routing/" + r.ID + "/edit") } class="btn-ghost text-huginn-dim">edit</a>
-								<form method="POST" action={ templ.URL("/routing/" + r.ID + "/delete") } class="inline">
+								<form hx-post={ "/routing/" + r.ID + "/delete" } class="inline">
 									@form.CSRFField(c)
 									<button type="submit" class="btn-ghost text-huginn-danger">delete</button>
 								</form>
@@ -50,7 +50,7 @@ templ ruleFormPage(c echo.Context, r *ruleVM, cals []*repo.Calendar) {
 	@components.AppLayout(c, ruleFormTitle(r)) {
 		<div class="max-w-lg mx-auto px-4 py-6">
 			<h1 class="text-sm font-medium text-huginn-fg uppercase tracking-wider mb-4">{ ruleFormTitle(r) }</h1>
-			<form method="POST" action={ ruleFormAction(r) } class="flex flex-col gap-4">
+			<form hx-post={ string(ruleFormAction(r)) } class="flex flex-col gap-4">
 				@form.CSRFField(c)
 				<div class="flex flex-col gap-1">
 					<label class="text-xs text-huginn-dim">name</label>

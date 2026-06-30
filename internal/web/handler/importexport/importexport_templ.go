@@ -48,7 +48,7 @@ func importPage(c echo.Context, calendars []*repo.Calendar, errMsg string) templ
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-lg mx-auto px-4 py-6\"><h1 class=\"text-sm font-medium text-huginn-fg uppercase tracking-wider mb-4\">import ics</h1><form method=\"POST\" action=\"/import\" enctype=\"multipart/form-data\" class=\"flex flex-col gap-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-lg mx-auto px-4 py-6\"><h1 class=\"text-sm font-medium text-huginn-fg uppercase tracking-wider mb-4\">import ics</h1><form id=\"import-form\" hx-post=\"/import\" hx-encoding=\"multipart/form-data\" hx-target=\"#import-form\" hx-swap=\"outerHTML\" class=\"flex flex-col gap-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

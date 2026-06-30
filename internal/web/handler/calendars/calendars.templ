@@ -45,7 +45,7 @@ templ calendarsPage(c echo.Context, cals []*repo.Calendar, userID string) {
 							<div class="flex items-center gap-3 px-3 py-2 bg-huginn-surface border border-huginn-line">
 								<span class="w-3 h-3 rounded-full shrink-0" style={ "background-color: " + cal.Color }></span>
 								<span class="text-xs text-huginn-fg flex-1">{ cal.Name }</span>
-								<form method="POST" action={ templ.URL("/calendars/" + cal.ID + "/leave") } class="inline">
+								<form hx-post={ "/calendars/" + cal.ID + "/leave" } class="inline">
 									@form.CSRFField(c)
 									<button type="submit" class="btn-ghost text-huginn-mute">leave</button>
 								</form>
@@ -78,7 +78,7 @@ templ calendarFormPage(c echo.Context, f CalendarForm, errors map[string]string,
 					<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3">sharing</h2>
 
 					<!-- Add member form -->
-					<form method="POST" action={ templ.URL("/calendars/" + calID + "/share") } class="flex gap-2 mb-4">
+					<form hx-post={ "/calendars/" + calID + "/share" } class="flex gap-2 mb-4">
 						@form.CSRFField(c)
 						<input type="email" name="email" class="input flex-1" placeholder="user@example.com" required/>
 						<select name="role" class="input w-28">
@@ -103,7 +103,7 @@ templ calendarFormPage(c echo.Context, f CalendarForm, errors map[string]string,
 										}
 									</div>
 									<span class="chip text-huginn-mute">{ m.Role }</span>
-									<form method="POST" action={ templ.URL("/calendars/" + calID + "/members/" + m.UserID + "/remove") } class="inline">
+									<form hx-post={ "/calendars/" + calID + "/members/" + m.UserID + "/remove" } class="inline">
 										@form.CSRFField(c)
 										<button type="submit" class="btn-ghost text-huginn-danger">remove</button>
 									</form>
@@ -126,7 +126,7 @@ templ calendarConfirmDeletePage(c echo.Context, cal *repo.Calendar) {
 			</p>
 			<div class="flex gap-2">
 				<a href="/calendars" class="btn">cancel</a>
-				<form method="POST" action={ templ.URL("/calendars/" + cal.ID + "/delete") }>
+				<form hx-post={ "/calendars/" + cal.ID + "/delete" }>
 					@form.CSRFField(c)
 					<button type="submit" class="btn-danger">delete</button>
 				</form>
@@ -137,7 +137,7 @@ templ calendarConfirmDeletePage(c echo.Context, cal *repo.Calendar) {
 
 templ calendarForm(c echo.Context, f CalendarForm, errors map[string]string, calID string) {
 	if calID == "" {
-		<form id="cal-form" hx-post="/calendars" hx-target="#cal-form" hx-swap="outerHTML" method="POST" action="/calendars" class="flex flex-col gap-4">
+		<form id="cal-form" hx-post="/calendars" hx-target="#cal-form" hx-swap="outerHTML" class="flex flex-col gap-4">
 			@form.CSRFField(c)
 			@calendarFields(f, errors)
 			<div class="flex gap-2">
@@ -146,7 +146,7 @@ templ calendarForm(c echo.Context, f CalendarForm, errors map[string]string, cal
 			</div>
 		</form>
 	} else {
-		<form id="cal-form" hx-post={ "/calendars/" + calID } hx-target="#cal-form" hx-swap="outerHTML" method="POST" class="flex flex-col gap-4">
+		<form id="cal-form" hx-post={ "/calendars/" + calID } hx-target="#cal-form" hx-swap="outerHTML" class="flex flex-col gap-4">
 			@form.CSRFField(c)
 			@calendarFields(f, errors)
 			<div class="flex gap-2">

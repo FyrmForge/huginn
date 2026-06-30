@@ -22,7 +22,7 @@ templ loginPage(c echo.Context, devAuthEmail string, f LoginForm, errors map[str
 }
 
 templ devLoginForm(c echo.Context, email string) {
-	<form method="POST" action="/dev-login">
+	<form hx-post="/dev-login">
 		@form.CSRFField(c)
 		<p class="text-huginn-mute text-xs mb-2 text-center uppercase tracking-widest">dev bypass</p>
 		<p class="text-huginn-fg text-xs mb-6 text-center font-mono">{ email }</p>
@@ -36,8 +36,6 @@ templ loginForm(c echo.Context, f LoginForm, errors map[string]string) {
 		hx-post="/login"
 		hx-swap="outerHTML"
 		hx-target="#login-form"
-		method="POST"
-		action="/login"
 	>
 		@form.CSRFField(c)
 		if form.GetError(errors, "general") != "" {

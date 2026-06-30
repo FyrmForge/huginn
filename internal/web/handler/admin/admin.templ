@@ -42,7 +42,7 @@ templ adminPage(c echo.Context, d pageData) {
 							</div>
 							<span class="text-[10px] text-huginn-mute shrink-0">{ fmtTime(u.CreatedAt) }</span>
 							<span class={ "chip shrink-0 " + roleClass(u.Role) }>{ u.Role }</span>
-							<form method="POST" action={ templ.URL("/admin/users/" + u.ID + "/role") } class="inline flex items-center gap-1 shrink-0">
+							<form hx-post={ "/admin/users/" + u.ID + "/role" } class="inline flex items-center gap-1 shrink-0">
 								@form.CSRFField(c)
 								if u.Role == "admin" {
 									<input type="hidden" name="role" value="user"/>

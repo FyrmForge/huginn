@@ -22,7 +22,7 @@ templ devicesPage(c echo.Context, aps []*repo.AppPassword, newToken string) {
 
 			<div class="mb-6">
 				<h2 class="text-xs text-huginn-dim uppercase tracking-wider mb-3">add device</h2>
-				<form method="POST" action="/settings/devices" class="flex gap-2">
+				<form hx-post="/settings/devices" class="flex gap-2">
 					@form.CSRFField(c)
 					<input type="text" name="name" class="input flex-1" placeholder="iPhone, Thunderbird, DAVx5…"/>
 					<button type="submit" class="btn-primary">create</button>
@@ -41,7 +41,7 @@ templ devicesPage(c echo.Context, aps []*repo.AppPassword, newToken string) {
 								if ap.RevokedAt != nil {
 									<span class="chip text-huginn-danger">revoked</span>
 								} else {
-									<form method="POST" action={ templ.URL("/settings/devices/" + ap.ID + "/revoke") } class="inline">
+									<form hx-post={ "/settings/devices/" + ap.ID + "/revoke" } class="inline">
 										@form.CSRFField(c)
 										<button type="submit" class="btn-ghost text-huginn-danger">revoke</button>
 									</form>

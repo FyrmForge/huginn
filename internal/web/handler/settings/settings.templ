@@ -14,7 +14,7 @@ templ settingsPage(c echo.Context, d PageData) {
 			<!-- General -->
 			<section>
 				<h2 class="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-huginn-mute border-b border-huginn-line pb-2 mb-3"><span class="w-1 h-3 bg-huginn-accent/60 rounded-sm shrink-0"></span>general</h2>
-				<form method="POST" action="/settings" class="flex flex-col gap-4">
+				<form hx-post="/settings" class="flex flex-col gap-4">
 					@form.CSRFField(c)
 					<div>
 						<label class="block text-xs text-huginn-dim mb-1">timezone</label>
@@ -81,7 +81,7 @@ templ settingsPage(c echo.Context, d PageData) {
 					</div>
 				}
 				<div class="mb-4">
-					<form method="POST" action="/settings/devices" class="flex gap-2">
+					<form hx-post="/settings/devices" class="flex gap-2">
 						@form.CSRFField(c)
 						<input type="text" name="name" class="input flex-1" placeholder="iPhone, Thunderbird, DAVx5…"/>
 						<button type="submit" class="btn-primary">add device</button>
@@ -97,7 +97,7 @@ templ settingsPage(c echo.Context, d PageData) {
 								if ap.RevokedAt != nil {
 									<span class="chip text-huginn-danger">revoked</span>
 								} else {
-									<form method="POST" action={ templ.URL("/settings/devices/" + ap.ID + "/revoke") } class="inline">
+									<form hx-post={ "/settings/devices/" + ap.ID + "/revoke" } class="inline">
 										@form.CSRFField(c)
 										<button type="submit" class="btn-ghost text-huginn-danger">revoke</button>
 									</form>
@@ -128,11 +128,11 @@ templ settingsPage(c echo.Context, d PageData) {
 									}
 									<span class={ "chip ml-2 " + connStatusClass(conn.Status) }>{ conn.Status }</span>
 								</div>
-								<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/sync") } class="inline">
+								<form hx-post={ "/connections/" + conn.ID + "/sync" } class="inline">
 									@form.CSRFField(c)
 									<button type="submit" class="btn-ghost">sync</button>
 								</form>
-								<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/disconnect") } class="inline">
+								<form hx-post={ "/connections/" + conn.ID + "/disconnect" } class="inline">
 									@form.CSRFField(c)
 									<button type="submit" class="btn-ghost text-huginn-danger">disconnect</button>
 								</form>
@@ -161,7 +161,7 @@ templ settingsPage(c echo.Context, d PageData) {
 								</div>
 								<div class="flex gap-2 shrink-0">
 									<a href={ templ.URL("/routing/" + r.ID + "/edit") } class="btn-ghost text-huginn-dim">edit</a>
-									<form method="POST" action={ templ.URL("/routing/" + r.ID + "/delete") } class="inline">
+									<form hx-post={ "/routing/" + r.ID + "/delete" } class="inline">
 										@form.CSRFField(c)
 										<button type="submit" class="btn-ghost text-huginn-danger">delete</button>
 									</form>
@@ -200,7 +200,7 @@ templ settingsPage(c echo.Context, d PageData) {
 						</div>
 					}
 					<div class="flex justify-end mt-2">
-						<form method="POST" action="/logout">
+						<form hx-post="/logout">
 							@form.CSRFField(c)
 							<button type="submit" class="btn-ghost text-huginn-danger">log out</button>
 						</form>

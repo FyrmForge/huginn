@@ -1,4 +1,4 @@
-.PHONY: build test lint templint db-sh docker-up docker-down docker-delete docker-reload clean install check-templ generate check-node-modules css css-build e2e e2e-local e2e-run e2e-run-local
+.PHONY: build test lint templint db-sh docker-up docker-down docker-delete docker-reload docker-build clean install check-templ generate check-node-modules css css-build e2e e2e-local e2e-run e2e-run-local
 
 # Force bash so the ENV_LOAD eval below works cross-shell (sh on Debian/Ubuntu
 # is dash, which doesn't grok `eval "$(...)"` quoting consistently).
@@ -105,6 +105,10 @@ e2e-run:
 ## e2e-run-local: Run specific E2E test locally: make e2e-run-local T=TestName
 e2e-run-local:
 	$(ENV_LOAD) go test -v -tags=e2e ./e2e -local -run "$(T)" -timeout 2m
+
+## docker-build: Test the production image build (mirrors CI, no push)
+docker-build:
+	docker build --build-arg VERSION=$(VERSION) -f cmd/site/Dockerfile -t huginn:$(VERSION) .
 
 ## clean: Remove build artifacts
 clean:

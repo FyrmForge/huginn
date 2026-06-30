@@ -84,7 +84,7 @@ func devicesPage(c echo.Context, aps []*repo.AppPassword, newToken string) templ
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"mb-6\"><h2 class=\"text-xs text-huginn-dim uppercase tracking-wider mb-3\">add device</h2><form method=\"POST\" action=\"/settings/devices\" class=\"flex gap-2\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"mb-6\"><h2 class=\"text-xs text-huginn-dim uppercase tracking-wider mb-3\">add device</h2><form hx-post=\"/settings/devices\" class=\"flex gap-2\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -130,14 +130,14 @@ func devicesPage(c echo.Context, aps []*repo.AppPassword, newToken string) templ
 							return templ_7745c5c3_Err
 						}
 					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<form method=\"POST\" action=\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<form hx-post=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var6 templ.SafeURL
-						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/settings/devices/" + ap.ID + "/revoke"))
+						var templ_7745c5c3_Var6 string
+						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs("/settings/devices/" + ap.ID + "/revoke")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/devices/devices.templ`, Line: 44, Col: 89}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/devices/devices.templ`, Line: 44, Col: 65}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 						if templ_7745c5c3_Err != nil {

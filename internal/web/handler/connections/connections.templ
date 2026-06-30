@@ -30,11 +30,11 @@ templ connectionsPage(c echo.Context, conns []*repo.SyncConnection) {
 								}
 								<span class={ "chip ml-2 " + connStatusClass(conn.Status) }>{ conn.Status }</span>
 							</div>
-							<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/sync") } class="inline">
+							<form hx-post={ "/connections/" + conn.ID + "/sync" } class="inline">
 								@form.CSRFField(c)
 								<button type="submit" class="btn-ghost">sync</button>
 							</form>
-							<form method="POST" action={ templ.URL("/connections/" + conn.ID + "/disconnect") } class="inline">
+							<form hx-post={ "/connections/" + conn.ID + "/disconnect" } class="inline">
 								@form.CSRFField(c)
 								<button type="submit" class="btn-ghost text-huginn-danger">disconnect</button>
 							</form>

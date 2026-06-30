@@ -41,8 +41,6 @@ templ eventForm(c echo.Context, f EventForm, calendars []*repo.Calendar, errors 
 			hx-post="/events"
 			hx-target="#modal-root"
 			hx-swap="innerHTML"
-			method="POST"
-			action="/events"
 			class="p-4 flex flex-col gap-3"
 		>
 			@form.CSRFField(c)
@@ -58,7 +56,6 @@ templ eventForm(c echo.Context, f EventForm, calendars []*repo.Calendar, errors 
 			hx-post={ eventUpdateURL(eventID, rid, scope) }
 			hx-target="#modal-root"
 			hx-swap="innerHTML"
-			method="POST"
 			class="p-4 flex flex-col gap-3"
 		>
 			@form.CSRFField(c)
