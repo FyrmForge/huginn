@@ -89,7 +89,6 @@ func (h *handler) WeekGrid(c echo.Context) error {
 	return respond.HTML(c, http.StatusOK, weekGrid(buildWeekGrid(weekStart, occs), weekStart))
 }
 
-
 // GET /calendar/grid?year=&month= — HTMX partial swap for prev/next navigation.
 func (h *handler) Grid(c echo.Context) error {
 	user := components.GetUser(c)

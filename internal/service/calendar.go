@@ -29,9 +29,9 @@ func NewCalendarService(store repo.Store) *CalendarService {
 	return &CalendarService{store: store}
 }
 
-// GetByID returns a calendar if the user has access to it.
+// GetByID returns a calendar if the user has at least viewer access.
 func (s *CalendarService) GetByID(ctx context.Context, userID, calendarID string) (*repo.Calendar, error) {
-	return s.get(ctx, userID, calendarID, "any")
+	return s.get(ctx, userID, calendarID, "viewer")
 }
 
 // ListForUser returns all calendars visible to the given user.

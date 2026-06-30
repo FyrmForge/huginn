@@ -19,7 +19,7 @@ type Event struct {
 	EndAt        time.Time
 	AllDay       bool
 	Status       string
-	RRule        string    // RRULE value without "RRULE:" prefix
+	RRule        string // RRULE value without "RRULE:" prefix
 	Exdates      []time.Time
 	Rdates       []time.Time
 	RecurrenceID time.Time // non-zero = this is an exception VEVENT

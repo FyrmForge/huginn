@@ -16,7 +16,6 @@ import (
 	"github.com/FyrmForge/huginn/internal/repo"
 	"github.com/FyrmForge/huginn/internal/service"
 	"github.com/FyrmForge/huginn/internal/web/components"
-	"github.com/FyrmForge/huginn/internal/web/handler/about"
 	"github.com/FyrmForge/huginn/internal/web/handler/admin"
 	authlogin "github.com/FyrmForge/huginn/internal/web/handler/auth/login"
 	authoidc "github.com/FyrmForge/huginn/internal/web/handler/auth/oidc"
@@ -24,10 +23,10 @@ import (
 	"github.com/FyrmForge/huginn/internal/web/handler/calendar"
 	"github.com/FyrmForge/huginn/internal/web/handler/calendars"
 	"github.com/FyrmForge/huginn/internal/web/handler/connections"
-	"github.com/FyrmForge/huginn/internal/web/handler/routing"
 	"github.com/FyrmForge/huginn/internal/web/handler/devices"
 	"github.com/FyrmForge/huginn/internal/web/handler/events"
 	"github.com/FyrmForge/huginn/internal/web/handler/importexport"
+	"github.com/FyrmForge/huginn/internal/web/handler/routing"
 	"github.com/FyrmForge/huginn/internal/web/handler/settings"
 )
 
@@ -144,18 +143,9 @@ func RegisterRoutes(srv *server.Server, deps *Deps) {
 	site.POST("/settings", settingsHandler.Save, bauth.RequireAuth())
 
 	// Admin dashboard (role = "admin" required).
-	requireAdmin := func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			u := components.GetUser(c)
-			if u == nil || u.Role != "admin" {
-				return echo.NewHTTPError(http.StatusForbidden, "admin only")
-			}
-			return next(c)
-		}
-	}
 	adminHandler := admin.NewHandler(deps.Store)
-	site.GET("/admin", adminHandler.Page, bauth.RequireAuth(), requireAdmin)
-	site.POST("/admin/users/:id/role", adminHandler.SetRole, bauth.RequireAuth(), requireAdmin)
+	site.GET("/admin", adminHandler.Page, bauth.RequireAuth(), middleware.RequireAdmin())
+	site.POST("/admin/users/:id/role", adminHandler.SetRole, bauth.RequireAuth(), middleware.RequireAdmin())
 
 	// Import / Export.
 	ixHandler := importexport.NewHandler(deps.CalendarService, deps.ImportExportService)
@@ -184,30 +174,5 @@ func RegisterRoutes(srv *server.Server, deps *Deps) {
 	site.POST("/settings/devices/:id/revoke", devHandler.Revoke, bauth.RequireAuth())
 
 	// CalDAV protocol (Basic Auth, no session).
-	davHandler := caldav.NewHandler(deps.CalDAVService, deps.CalendarService, deps.EventService)
-	// Well-known at root (outside /dav group so path is correct).
-	e.Any("/.well-known/caldav", davHandler.WellKnown)
-	dav := e.Group("/dav")
-	dav.OPTIONS("/", davHandler.Options)
-	dav.OPTIONS("/*", davHandler.Options)
-	dav.Match([]string{"PROPFIND"}, "/", davHandler.Principal)
-	dav.Match([]string{"PROPFIND"}, "/calendars/:userID/", davHandler.CalendarHome)
-	dav.Match([]string{"PROPFIND"}, "/calendars/:userID/:calID/", davHandler.CalendarCollection)
-	dav.Match([]string{"PROPFIND"}, "/calendars/:userID/:calID", davHandler.CalendarCollection)
-	dav.Match([]string{"REPORT"}, "/calendars/:userID/:calID/", davHandler.Report)
-	dav.Match([]string{"REPORT"}, "/calendars/:userID/:calID", davHandler.Report)
-	dav.Match([]string{"PROPFIND"}, "/calendars/:userID/:calID/:eventUID", davHandler.PropfindEvent)
-	dav.GET("/calendars/:userID/:calID/:eventUID", davHandler.GetEvent)
-	dav.PUT("/calendars/:userID/:calID/:eventUID", davHandler.PutEvent)
-	dav.DELETE("/calendars/:userID/:calID/:eventUID", davHandler.DeleteEvent)
-	dav.Match([]string{"MKCALENDAR"}, "/calendars/:userID/:calID/", davHandler.MkCalendar)
-	dav.Match([]string{"MKCALENDAR"}, "/calendars/:userID/:calID", davHandler.MkCalendar)
-}
-
-// RegisterStaticPages registers handlers for static generation and runtime
-// serving. Each call to StaticPage registers both a generation entry and a
-// GET route. These handlers must not depend on database or session state.
-func RegisterStaticPages(srv *server.Server) {
-	h := about.NewHandler()
-	srv.StaticPage("/about", h.About)
+	caldav.NewHandler(deps.CalDAVService, deps.CalendarService, deps.EventService).RegisterRoutes(e)
 }

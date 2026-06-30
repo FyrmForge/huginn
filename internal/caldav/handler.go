@@ -44,14 +44,18 @@ func NewHandler(caldavService *service.CalDAVService, calendarService *service.C
 }
 
 // authUser extracts and authenticates the user from Basic Auth.
+// If a username is provided it must match the token owner's ID or email.
 func (h *Handler) authUser(c echo.Context) (*repo.User, error) {
-	_, pass, ok := c.Request().BasicAuth()
+	username, pass, ok := c.Request().BasicAuth()
 	if !ok {
 		return nil, fmt.Errorf("missing basic auth")
 	}
 	user, err := h.caldavService.Authenticate(c.Request().Context(), pass)
 	if err != nil {
 		return nil, err
+	}
+	if username != "" && username != user.ID && username != user.Email {
+		return nil, fmt.Errorf("username mismatch")
 	}
 	return user, nil
 }
@@ -307,7 +311,7 @@ func (h *Handler) PutEvent(c echo.Context) error {
 		if exEndAt.IsZero() {
 			exEndAt = ev.StartAt.Add(time.Hour)
 		}
-		_ = h.eventService.UpsertCalDAVException(c.Request().Context(), user.ID, masterID, ev.RecurrenceID, service.EventInput{
+		if err := h.eventService.UpsertCalDAVException(c.Request().Context(), user.ID, masterID, ev.RecurrenceID, service.EventInput{
 			Title:       ev.Summary,
 			Description: ev.Description,
 			Location:    ev.Location,
@@ -315,7 +319,9 @@ func (h *Handler) PutEvent(c echo.Context) error {
 			EndAt:       exEndAt,
 			Timezone:    "UTC",
 			AllDay:      ev.AllDay,
-		}, ev.Status == "cancelled")
+		}, ev.Status == "cancelled"); err != nil {
+			return c.NoContent(http.StatusInternalServerError)
+		}
 	}
 
 	if existing != nil {
@@ -335,6 +341,9 @@ func (h *Handler) DeleteEvent(c echo.Context) error {
 		return c.NoContent(http.StatusForbidden)
 	}
 	calID := c.Param("calID")
+	if _, err := h.calendarService.GetByID(c.Request().Context(), user.ID, calID); err != nil {
+		return c.NoContent(http.StatusForbidden)
+	}
 	eventID := strings.TrimSuffix(c.Param("eventUID"), ".ics")
 	event, err := h.eventService.GetByID(c.Request().Context(), eventID)
 	if err != nil || event == nil || event.CalendarID != calID {
@@ -415,6 +424,9 @@ func (h *Handler) handleMultiget(c echo.Context, user *repo.User, cal *repo.Cale
 		parts := strings.Split(strings.TrimSuffix(href, "/"), "/")
 		eventID := strings.TrimSuffix(parts[len(parts)-1], ".ics")
 		e, _ := h.eventService.GetByID(c.Request().Context(), eventID)
+		if e != nil && e.CalendarID != cal.ID {
+			e = nil
+		}
 		eventMap[href] = e
 		if e != nil {
 			events = append(events, e)

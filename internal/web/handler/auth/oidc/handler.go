@@ -38,6 +38,7 @@ func (h *handler) Login(c echo.Context) error {
 		Path:     "/",
 		MaxAge:   300,
 		HttpOnly: true,
+		Secure:   h.sessionManager.CookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 	})
 	return respond.Redirect(c, h.oidc.AuthURL(state))

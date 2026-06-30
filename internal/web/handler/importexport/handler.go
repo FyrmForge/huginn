@@ -13,13 +13,13 @@ import (
 )
 
 type handler struct {
-	calendarService    *service.CalendarService
+	calendarService     *service.CalendarService
 	importExportService *service.ImportExportService
 }
 
 func NewHandler(calendarService *service.CalendarService, importExportService *service.ImportExportService) *handler {
 	return &handler{
-		calendarService:    calendarService,
+		calendarService:     calendarService,
 		importExportService: importExportService,
 	}
 }

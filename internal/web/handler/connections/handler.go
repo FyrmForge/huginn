@@ -57,8 +57,8 @@ func (h *handler) Callback(c echo.Context) error {
 	if user == nil {
 		return echo.NewHTTPError(http.StatusUnauthorized)
 	}
-	code     := c.QueryParam("code")
-	state    := c.QueryParam("state")
+	code := c.QueryParam("code")
+	state := c.QueryParam("state")
 	provider := c.QueryParam("scope") // used as fallback; actual provider from state cookie is cleaner
 	_ = provider
 

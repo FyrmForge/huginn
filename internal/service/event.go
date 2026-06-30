@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	rrule "github.com/teambition/rrule-go"
 	"github.com/google/uuid"
+	rrule "github.com/teambition/rrule-go"
 
 	"github.com/FyrmForge/huginn/internal/repo"
 )

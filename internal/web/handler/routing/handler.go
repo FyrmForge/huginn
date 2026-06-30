@@ -28,7 +28,7 @@ func (h *handler) Page(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized)
 	}
 	rules, _ := h.routing.ListForUser(c.Request().Context(), user.ID)
-	cals, _  := h.calendar.ListForUser(c.Request().Context(), user.ID)
+	cals, _ := h.calendar.ListForUser(c.Request().Context(), user.ID)
 	return respond.HTML(c, http.StatusOK, routingPage(c, rules, cals))
 }
 

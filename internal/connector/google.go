@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-const googleAuthURL  = "https://accounts.google.com/o/oauth2/v2/auth"
+const googleAuthURL = "https://accounts.google.com/o/oauth2/v2/auth"
 const googleTokenURL = "https://oauth2.googleapis.com/token"
-const googleCalBase  = "https://www.googleapis.com/calendar/v3"
+const googleCalBase = "https://www.googleapis.com/calendar/v3"
 
 // GoogleProvider implements OAuthProvider and CalendarConnector for Google Calendar.
 type GoogleProvider struct {
@@ -94,11 +94,11 @@ func (g *GoogleProvider) ListCalendars(ctx context.Context, tok *Token) ([]Exter
 	}
 	var resp struct {
 		Items []struct {
-			ID          string `json:"id"`
-			Summary     string `json:"summary"`
-			Description string `json:"description"`
+			ID              string `json:"id"`
+			Summary         string `json:"summary"`
+			Description     string `json:"description"`
 			BackgroundColor string `json:"backgroundColor"`
-			Primary     bool   `json:"primary"`
+			Primary         bool   `json:"primary"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -182,11 +182,11 @@ func (g *GoogleProvider) fetchEvents(ctx context.Context, tok *Token, calendarID
 			}
 			if item.Start.DateTime != "" {
 				ev.StartAt, _ = time.Parse(time.RFC3339, item.Start.DateTime)
-				ev.EndAt, _   = time.Parse(time.RFC3339, item.End.DateTime)
+				ev.EndAt, _ = time.Parse(time.RFC3339, item.End.DateTime)
 			} else {
 				ev.AllDay = true
 				ev.StartAt, _ = time.Parse("2006-01-02", item.Start.Date)
-				ev.EndAt, _   = time.Parse("2006-01-02", item.End.Date)
+				ev.EndAt, _ = time.Parse("2006-01-02", item.End.Date)
 			}
 			events = append(events, ev)
 		}

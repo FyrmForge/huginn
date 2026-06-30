@@ -238,6 +238,9 @@ func (h *handler) ConfirmDelete(c echo.Context) error {
 	if err != nil || e == nil {
 		return echo.NewHTTPError(http.StatusNotFound)
 	}
+	if _, err := h.calendarService.GetByID(c.Request().Context(), user.ID, e.CalendarID); err != nil {
+		return echo.NewHTTPError(http.StatusForbidden)
+	}
 	rid := c.QueryParam("rid")
 	scope := c.QueryParam("scope")
 	if e.RRule != "" && rid != "" && scope == "" {
@@ -270,8 +273,14 @@ func (h *handler) Update(c echo.Context) error {
 	}
 
 	// Permission check.
-	e, _ := h.eventService.GetByID(c.Request().Context(), c.Param("id"))
-	if e != nil && !h.canEditCalendar(c, e.CalendarID, user.ID) {
+	e, err := h.eventService.GetByID(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	if e == nil {
+		return echo.NewHTTPError(http.StatusNotFound)
+	}
+	if !h.canEditCalendar(c, e.CalendarID, user.ID) {
 		return echo.NewHTTPError(http.StatusForbidden, "view-only access")
 	}
 
@@ -314,10 +323,15 @@ func (h *handler) Delete(c echo.Context) error {
 	scope := c.QueryParam("scope")
 
 	// Permission check.
-	if ev, _ := h.eventService.GetByID(c.Request().Context(), c.Param("id")); ev != nil {
-		if !h.canEditCalendar(c, ev.CalendarID, user.ID) {
-			return echo.NewHTTPError(http.StatusForbidden, "view-only access")
-		}
+	ev, err := h.eventService.GetByID(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	if ev == nil {
+		return echo.NewHTTPError(http.StatusNotFound)
+	}
+	if !h.canEditCalendar(c, ev.CalendarID, user.ID) {
+		return echo.NewHTTPError(http.StatusForbidden, "view-only access")
 	}
 
 	var deleteErr error
@@ -339,7 +353,6 @@ func (h *handler) Delete(c echo.Context) error {
 	c.Response().Header().Set("HX-Trigger", "huginn:refresh-calendar")
 	return respond.HTML(c, http.StatusOK, modalClosed())
 }
-
 
 // eventToForm converts a repo.Event (master) to an EventForm for the edit UI.
 func eventToForm(e *repo.Event, loc *time.Location) EventForm {
@@ -404,13 +417,13 @@ func parseRRule(ruleStr string) (freq string, interval int, byday, endType, unti
 
 // EventForm holds form values for create/edit.
 type EventForm struct {
-	Title         string `form:"title"`
-	Description   string `form:"description"`
-	Location      string `form:"location"`
-	CalendarID    string `form:"calendar_id"`
-	StartAt       string `form:"start_at"`
-	EndAt         string `form:"end_at"`
-	AllDay        bool   `form:"all_day"`
+	Title       string `form:"title"`
+	Description string `form:"description"`
+	Location    string `form:"location"`
+	CalendarID  string `form:"calendar_id"`
+	StartAt     string `form:"start_at"`
+	EndAt       string `form:"end_at"`
+	AllDay      bool   `form:"all_day"`
 	// Display-only (not bound from form)
 	CreatedByName string `form:"-"`
 	// Recurrence fields

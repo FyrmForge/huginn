@@ -17,11 +17,11 @@ import (
 	"github.com/FyrmForge/hamr/pkg/server"
 	"github.com/FyrmForge/hamr/pkg/storage"
 	"github.com/FyrmForge/hamr/pkg/websocket"
-	appdb "github.com/FyrmForge/huginn/internal/db"
+	"github.com/FyrmForge/huginn/internal/api"
 	"github.com/FyrmForge/huginn/internal/connector"
+	appdb "github.com/FyrmForge/huginn/internal/db"
 	"github.com/FyrmForge/huginn/internal/repo/postgres"
 	"github.com/FyrmForge/huginn/internal/service"
-	"github.com/FyrmForge/huginn/internal/api"
 	"github.com/FyrmForge/huginn/internal/web"
 	"github.com/FyrmForge/huginn/internal/web/components"
 )
@@ -30,21 +30,21 @@ import (
 var version = "dev"
 
 var (
-	envPort              = config.GetEnvOrDefaultInt("PORT", 8080)
-	envGoogleClientID    = config.GetEnvOrDefault("GOOGLE_CLIENT_ID", "")
-	envGoogleClientSecret = config.GetEnvOrDefault("GOOGLE_CLIENT_SECRET", "")
-	envOutlookClientID   = config.GetEnvOrDefault("OUTLOOK_CLIENT_ID", "")
+	envPort                = config.GetEnvOrDefaultInt("PORT", 8080)
+	envGoogleClientID      = config.GetEnvOrDefault("GOOGLE_CLIENT_ID", "")
+	envGoogleClientSecret  = config.GetEnvOrDefault("GOOGLE_CLIENT_SECRET", "")
+	envOutlookClientID     = config.GetEnvOrDefault("OUTLOOK_CLIENT_ID", "")
 	envOutlookClientSecret = config.GetEnvOrDefault("OUTLOOK_CLIENT_SECRET", "")
 	// DEV_MODE defaults to false (fail closed in prod). Local dev sets
 	// DEV_MODE=true via .env so the scaffolded `.env` ships with it set
 	// explicitly. This makes the STRIPE_MOCK production guard actually
 	// guard — a leftover STRIPE_MOCK=true in a prod deploy without
 	// DEV_MODE explicitly set would otherwise slip through.
-	envDevMode       = config.GetEnvOrDefaultBool("DEV_MODE", false)
-	envBaseURL       = config.GetEnvOrDefault("BASE_URL", "")
-	envDatabaseURL   = config.GetEnvOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/huginn?sslmode=disable")
-	envStaticBaseURL = config.GetEnvOrDefault("STATIC_BASE_URL", "/static")
-	envStoragePath   = config.GetEnvOrDefault("STORAGE_PATH", "./uploads")
+	envDevMode        = config.GetEnvOrDefaultBool("DEV_MODE", false)
+	envBaseURL        = config.GetEnvOrDefault("BASE_URL", "")
+	envDatabaseURL    = config.GetEnvOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/huginn?sslmode=disable")
+	envStaticBaseURL  = config.GetEnvOrDefault("STATIC_BASE_URL", "/static")
+	envStoragePath    = config.GetEnvOrDefault("STORAGE_PATH", "./uploads")
 	envTrustedProxies = config.GetEnvCSV("TRUSTED_PROXIES")
 	// DEV_AUTH_EMAIL: when set, replaces the login form with a one-click dev bypass.
 	// The user is created on first login. Never set this in production.
@@ -103,8 +103,6 @@ func main() {
 		}))
 	}
 
-	// Static page generation — no heavy deps needed.
-	web.RegisterStaticPages(srv)
 	if *generateFlag {
 		if err := srv.GenerateStatic("generated"); err != nil {
 			log.Error("generate static pages failed", "error", err)
@@ -154,12 +152,12 @@ func main() {
 	authService := service.NewAuthService(store)
 
 	// Calendar & event services.
-	calendarService     := service.NewCalendarService(store)
-	eventService        := service.NewEventService(store)
-	settingsService     := service.NewSettingsService(store)
+	calendarService := service.NewCalendarService(store)
+	eventService := service.NewEventService(store)
+	settingsService := service.NewSettingsService(store)
 	importExportService := service.NewImportExportService(store)
-	caldavService       := service.NewCalDAVService(store)
-	routingService      := service.NewRoutingService(store)
+	caldavService := service.NewCalDAVService(store)
+	routingService := service.NewRoutingService(store)
 
 	// Sync service with optional provider connectors.
 	syncService := service.NewSyncService(store, calendarService, eventService, routingService)
@@ -189,14 +187,14 @@ func main() {
 	})
 
 	web.RegisterRoutes(srv, &web.Deps{
-		Store:         store,
-		BaseURL:       baseOrigin,
-		StaticBaseURL: envStaticBaseURL,
-		DevMode:       envDevMode,
-		DevAuthEmail:      envDevAuthEmail,
-		AllowRegistration: envAllowRegistration,
-		OIDCService:       oidcService,
-		SessionManager: sessionManager,
+		Store:               store,
+		BaseURL:             baseOrigin,
+		StaticBaseURL:       envStaticBaseURL,
+		DevMode:             envDevMode,
+		DevAuthEmail:        envDevAuthEmail,
+		AllowRegistration:   envAllowRegistration,
+		OIDCService:         oidcService,
+		SessionManager:      sessionManager,
 		AuthService:         authService,
 		CalendarService:     calendarService,
 		EventService:        eventService,
@@ -205,8 +203,8 @@ func main() {
 		CalDAVService:       caldavService,
 		SyncService:         syncService,
 		RoutingService:      routingService,
-		FileStorage:     fileStorage,
-		Hub:             hub,
+		FileStorage:         fileStorage,
+		Hub:                 hub,
 	})
 
 	log.Info("starting server", "port", envPort, "devMode", envDevMode)

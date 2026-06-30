@@ -14,13 +14,13 @@ type Stats struct {
 
 // CalendarMemberInfo joins a calendar_member row with the user's display data.
 type CalendarMemberInfo struct {
-	CalendarID string    `db:"calendar_id"`
-	UserID     string    `db:"user_id"`
-	Role       string    `db:"role"`
+	CalendarID  string    `db:"calendar_id"`
+	UserID      string    `db:"user_id"`
+	Role        string    `db:"role"`
 	MemberSince time.Time `db:"created_at"`
-	Email      string    `db:"email"`
-	Name       string    `db:"name"`
-	AvatarURL  string    `db:"avatar_url"`
+	Email       string    `db:"email"`
+	Name        string    `db:"name"`
+	AvatarURL   string    `db:"avatar_url"`
 }
 
 // UserSettings holds per-user preferences.
@@ -39,18 +39,18 @@ type UserSettings struct {
 
 // Calendar is a named collection of events owned by a user.
 type Calendar struct {
-	ID                 string     `db:"id"`
-	OwnerID            string     `db:"owner_id"`
-	Name               string     `db:"name"`
-	Description        string     `db:"description"`
-	Color              string     `db:"color"`
-	Timezone           string     `db:"timezone"`
-	DefaultVisibility  string     `db:"default_visibility"`
-	DefaultBusyStatus  string     `db:"default_busy_status"`
-	IsDefault          bool       `db:"is_default"`
-	DeletedAt          *time.Time `db:"deleted_at"`
-	CreatedAt          time.Time  `db:"created_at"`
-	UpdatedAt          time.Time  `db:"updated_at"`
+	ID                string     `db:"id"`
+	OwnerID           string     `db:"owner_id"`
+	Name              string     `db:"name"`
+	Description       string     `db:"description"`
+	Color             string     `db:"color"`
+	Timezone          string     `db:"timezone"`
+	DefaultVisibility string     `db:"default_visibility"`
+	DefaultBusyStatus string     `db:"default_busy_status"`
+	IsDefault         bool       `db:"is_default"`
+	DeletedAt         *time.Time `db:"deleted_at"`
+	CreatedAt         time.Time  `db:"created_at"`
+	UpdatedAt         time.Time  `db:"updated_at"`
 }
 
 // CalendarMember is a user's membership in a shared calendar.
@@ -88,9 +88,9 @@ type Event struct {
 	Status      string     `db:"status"`
 	Visibility  string     `db:"visibility"`
 	BusyStatus  string     `db:"busy_status"`
-	RRule       string     `db:"rrule"`    // RRULE string, e.g. "FREQ=WEEKLY;BYDAY=MO"
-	Exdates     string     `db:"exdates"`  // comma-separated UTC timestamps (RFC5545 EXDATE)
-	Rdates      string     `db:"rdates"`   // comma-separated UTC timestamps (RFC5545 RDATE)
+	RRule       string     `db:"rrule"`   // RRULE string, e.g. "FREQ=WEEKLY;BYDAY=MO"
+	Exdates     string     `db:"exdates"` // comma-separated UTC timestamps (RFC5545 EXDATE)
+	Rdates      string     `db:"rdates"`  // comma-separated UTC timestamps (RFC5545 RDATE)
 	RawICS      string     `db:"raw_ics"`
 	ETag        string     `db:"etag"`
 	Ownership   string     `db:"ownership"` // native, caldav_created, imported_readonly

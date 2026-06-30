@@ -3,9 +3,9 @@ package api
 import (
 	"github.com/FyrmForge/hamr/pkg/server"
 
+	"github.com/FyrmForge/huginn/internal/api/handler/health"
 	"github.com/FyrmForge/huginn/internal/middleware"
 	"github.com/FyrmForge/huginn/internal/repo"
-	"github.com/FyrmForge/huginn/internal/api/handler/health"
 )
 
 // Deps holds the dependencies for API route registration.

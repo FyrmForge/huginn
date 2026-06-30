@@ -61,12 +61,12 @@ func (s *RoutingService) Update(ctx context.Context, userID, ruleID string, in R
 	if err != nil || r == nil || r.UserID != userID {
 		return fmt.Errorf("rule not found")
 	}
-	r.Name             = in.Name
-	r.RuleType         = in.RuleType
-	r.MatchValue       = in.MatchValue
-	r.CaseSensitive    = in.CaseSensitive
+	r.Name = in.Name
+	r.RuleType = in.RuleType
+	r.MatchValue = in.MatchValue
+	r.CaseSensitive = in.CaseSensitive
 	r.TargetCalendarID = in.TargetCalendarID
-	r.Priority         = in.Priority
+	r.Priority = in.Priority
 	return s.store.UpdateRoutingRule(ctx, r)
 }
 
@@ -135,7 +135,7 @@ func matchRule(r *repo.RoutingRule, e *repo.Event) (bool, string) {
 		needle := r.MatchValue
 		if !r.CaseSensitive {
 			haystack = strings.ToLower(haystack)
-			needle   = strings.ToLower(needle)
+			needle = strings.ToLower(needle)
 		}
 		if strings.Contains(haystack, needle) {
 			return true, fmt.Sprintf("keyword %q matched in title/description", r.MatchValue)

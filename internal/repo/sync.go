@@ -14,15 +14,15 @@ type OAuthProviderConfig struct {
 
 // SyncConnection is a user's connected external calendar account.
 type SyncConnection struct {
-	ID             string     `db:"id"`
-	UserID         string     `db:"user_id"`
-	Provider       string     `db:"provider"`
-	ExternalEmail  string     `db:"external_email"`
-	Status         string     `db:"status"`
-	LastSyncedAt   *time.Time `db:"last_synced_at"`
-	LastError      string     `db:"last_error"`
-	CreatedAt      time.Time  `db:"created_at"`
-	UpdatedAt      time.Time  `db:"updated_at"`
+	ID            string     `db:"id"`
+	UserID        string     `db:"user_id"`
+	Provider      string     `db:"provider"`
+	ExternalEmail string     `db:"external_email"`
+	Status        string     `db:"status"`
+	LastSyncedAt  *time.Time `db:"last_synced_at"`
+	LastError     string     `db:"last_error"`
+	CreatedAt     time.Time  `db:"created_at"`
+	UpdatedAt     time.Time  `db:"updated_at"`
 }
 
 // SyncConnectionToken holds OAuth tokens for a sync connection.

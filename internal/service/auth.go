@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	ErrEmailTaken        = errors.New("email already registered")
+	ErrEmailTaken         = errors.New("email already registered")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 )
 
@@ -115,8 +115,8 @@ func (s *AuthService) UpsertOIDCUser(ctx context.Context, email, name, avatarURL
 		return user, nil
 	}
 
-	user.Name      = name
-	user.Role      = role
+	user.Name = name
+	user.Role = role
 	user.AvatarURL = avatarURL
 	user.UpdatedAt = now
 	if err := s.store.UpdateUser(ctx, user); err != nil {

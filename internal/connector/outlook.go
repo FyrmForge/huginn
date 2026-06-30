@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-const outlookAuthURL  = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+const outlookAuthURL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 const outlookTokenURL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-const outlookCalBase  = "https://graph.microsoft.com/v1.0/me"
+const outlookCalBase = "https://graph.microsoft.com/v1.0/me"
 
 // OutlookProvider implements OAuthProvider and CalendarConnector for Microsoft 365.
 type OutlookProvider struct {
@@ -91,10 +91,10 @@ func (o *OutlookProvider) ListCalendars(ctx context.Context, tok *Token) ([]Exte
 	}
 	var resp struct {
 		Value []struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Color       string `json:"color"`
-			IsDefaultCalendar bool `json:"isDefaultCalendar"`
+			ID                string `json:"id"`
+			Name              string `json:"name"`
+			Color             string `json:"color"`
+			IsDefaultCalendar bool   `json:"isDefaultCalendar"`
 		} `json:"value"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -120,7 +120,7 @@ func (o *OutlookProvider) IncrementalSync(ctx context.Context, tok *Token, calen
 
 func (o *OutlookProvider) fetchEvents(ctx context.Context, tok *Token, calendarID string) ([]ExternalEvent, string, error) {
 	startTime := time.Now().AddDate(-1, 0, 0).Format(time.RFC3339)
-	endTime   := time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
+	endTime := time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
 
 	var events []ExternalEvent
 	nextLink := fmt.Sprintf("%s/calendars/%s/calendarView?startDateTime=%s&endDateTime=%s&$top=100",
@@ -133,15 +133,23 @@ func (o *OutlookProvider) fetchEvents(ctx context.Context, tok *Token, calendarI
 		}
 		var page struct {
 			Value []struct {
-				ID          string `json:"id"`
-				ICalUID     string `json:"iCalUId"`
-				Subject     string `json:"subject"`
-				Body        struct{ Content string `json:"content"` } `json:"body"`
-				Location    struct{ DisplayName string `json:"displayName"` } `json:"location"`
-				IsAllDay    bool   `json:"isAllDay"`
+				ID      string `json:"id"`
+				ICalUID string `json:"iCalUId"`
+				Subject string `json:"subject"`
+				Body    struct {
+					Content string `json:"content"`
+				} `json:"body"`
+				Location struct {
+					DisplayName string `json:"displayName"`
+				} `json:"location"`
+				IsAllDay             bool   `json:"isAllDay"`
 				LastModifiedDateTime string `json:"lastModifiedDateTime"`
-				Start       struct{ DateTime string `json:"dateTime"` } `json:"start"`
-				End         struct{ DateTime string `json:"dateTime"` } `json:"end"`
+				Start                struct {
+					DateTime string `json:"dateTime"`
+				} `json:"start"`
+				End struct {
+					DateTime string `json:"dateTime"`
+				} `json:"end"`
 			} `json:"value"`
 			NextLink string `json:"@odata.nextLink"`
 		}
@@ -162,7 +170,7 @@ func (o *OutlookProvider) fetchEvents(ctx context.Context, tok *Token, calendarI
 			}
 			// Graph returns UTC without Z suffix
 			ev.StartAt, _ = time.Parse("2006-01-02T15:04:05.0000000", item.Start.DateTime)
-			ev.EndAt, _   = time.Parse("2006-01-02T15:04:05.0000000", item.End.DateTime)
+			ev.EndAt, _ = time.Parse("2006-01-02T15:04:05.0000000", item.End.DateTime)
 			events = append(events, ev)
 		}
 		nextLink = page.NextLink

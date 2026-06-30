@@ -18,6 +18,10 @@ TEMPL_VERSION := $(shell grep 'github.com/a-h/templ ' go.mod | awk '{print $$2}'
 # `make install`); plain .env still loads normally inside the binary.
 ENV_LOAD := eval "$$(hamr env --export 2>/dev/null || true)";
 
+## fmt: Format all Go source files
+fmt:
+	go fmt ./...
+
 ## install: Install development dependencies
 install:
 	go install github.com/FyrmForge/hamr/cmd/hamr@$(HAMR_VERSION)

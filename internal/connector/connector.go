@@ -19,16 +19,16 @@ type Token struct {
 // ExternalEvent is the normalised representation of an event from any provider.
 // Provider-specific fields do not appear here.
 type ExternalEvent struct {
-	ProviderID  string // stable ID in the external system
-	UID         string // iCalendar UID if present
-	Title       string
-	Description string
-	Location    string
-	StartAt     time.Time
-	EndAt       time.Time
-	AllDay      bool
-	Status      string
-	UpdatedAt   time.Time
+	ProviderID   string // stable ID in the external system
+	UID          string // iCalendar UID if present
+	Title        string
+	Description  string
+	Location     string
+	StartAt      time.Time
+	EndAt        time.Time
+	AllDay       bool
+	Status       string
+	UpdatedAt    time.Time
 	ProviderETag string
 }
 
