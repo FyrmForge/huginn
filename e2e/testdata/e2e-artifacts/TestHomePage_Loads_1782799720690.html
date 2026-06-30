@@ -1,0 +1,14 @@
+<html lang="en" class="dark"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Log In — huginn</title><link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%234f8ef7'/><text x='16' y='22' font-family='monospace' font-size='18' font-weight='bold' fill='white' text-anchor='middle'>h</text></svg>"><link rel="stylesheet" href="/static/css/output.9c9c2918b268.css"></head><body class="min-h-screen"><div class="max-w-sm mx-auto mt-20 bg-huginn-surface border border-huginn-line p-8"><div class="mb-6 text-center"><span class="text-huginn-accent font-semibold tracking-widest text-lg">huginn</span></div><form id="login-form" hx-post="/login" hx-swap="outerHTML" hx-target="#login-form" method="POST" action="/login"><input type="hidden" name="csrf_token" value="_echo_csrf_using_sec_fetch_site_"><div class="mb-4"><label for="email" class="block text-xs text-huginn-dim mb-1">email</label> <input type="email" id="email" name="email" value="" class="input" hx-post="/login/validate/email" hx-trigger="blur, input[this.closest('div').querySelector('[data-has-error=true]')] delay:300ms" hx-swap="none"><span class="text-red-400 text-sm mt-1 block" id="error-email" data-has-error="false" aria-live="polite"></span></div><div class="mb-6"><label for="password" class="block text-xs text-huginn-dim mb-1">password</label> <input type="password" id="password" name="password" class="input" hx-post="/login/validate/password" hx-trigger="blur, input[this.closest('div').querySelector('[data-has-error=true]')] delay:300ms" hx-swap="none"><span class="text-red-400 text-sm mt-1 block" id="error-password" data-has-error="false" aria-live="polite"></span></div><button type="submit" class="btn-primary w-full justify-center">log in</button></form></div><script src="/static/js/htmx.min.e209dda5c823.js"></script><script src="/static/js/main.ce0502668c47.js"></script><script>
+		htmx.config.responseHandling = [
+			{code:"204", swap: false},
+			{code:"[23]..", swap: true},
+			{code:"400", swap: true, error: false},
+			{code:"422", swap: true, error: false},
+			{code:"429", swap: true, error: false},
+			{code:"[45]..", swap: false, error: true}
+		];
+		document.addEventListener('htmx:configRequest', function(evt) {
+			var csrfToken = document.querySelector('input[name="csrf_token"]');
+			if (csrfToken) evt.detail.headers['X-CSRF-Token'] = csrfToken.value;
+		});
+	</script></body></html>

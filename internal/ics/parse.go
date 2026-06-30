@@ -163,11 +163,6 @@ func parseDateTimeParam(key, val string) (t time.Time, allDay bool, ok bool) {
 	return
 }
 
-// parseDateTime is kept for backwards compatibility.
-func parseDateTime(key, val string) (time.Time, bool) {
-	t, allDay, _ := parseDateTimeParam(key, val)
-	return t, allDay
-}
 
 // unfoldLine removes iCalendar line folding (continuation lines start with space/tab).
 func unfoldLine(line string) string {

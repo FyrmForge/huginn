@@ -396,7 +396,7 @@ func parseRRule(ruleStr string) (freq string, interval int, byday, endType, unti
 		case "FREQ":
 			freq = kv[1]
 		case "INTERVAL":
-			fmt.Sscanf(kv[1], "%d", &interval)
+			_, _ = fmt.Sscanf(kv[1], "%d", &interval)
 		case "BYDAY":
 			byday = kv[1]
 		case "UNTIL":
@@ -409,7 +409,7 @@ func parseRRule(ruleStr string) (freq string, interval int, byday, endType, unti
 			}
 		case "COUNT":
 			endType = "count"
-			fmt.Sscanf(kv[1], "%d", &count)
+			_, _ = fmt.Sscanf(kv[1], "%d", &count)
 		}
 	}
 	return

@@ -62,7 +62,7 @@ func (o *OutlookProvider) tokenRequest(ctx context.Context, v url.Values) (*Toke
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("outlook token: %s", body)
@@ -186,7 +186,7 @@ func outlookGET(ctx context.Context, accessToken, u string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("outlook api %s: %s", u, body)

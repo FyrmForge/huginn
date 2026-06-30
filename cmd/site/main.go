@@ -26,8 +26,6 @@ import (
 	"github.com/FyrmForge/huginn/internal/web/components"
 )
 
-// version is set at build time via ldflags.
-var version = "dev"
 
 var (
 	envPort                = config.GetEnvOrDefaultInt("PORT", 8080)
@@ -113,8 +111,8 @@ func main() {
 
 	// Database.
 	connectCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
 	database, err := db.ConnectContext(connectCtx, envDatabaseURL)
+	cancel()
 	if err != nil {
 		log.Error("failed to connect to database", "error", err)
 		os.Exit(1)
@@ -180,7 +178,6 @@ func main() {
 
 	// WebSocket hub.
 	hub := websocket.NewHub(websocket.WithLogger(log))
-	defer hub.Close()
 
 	api.RegisterRoutes(srv, &api.Deps{
 		Store: store,
@@ -210,6 +207,7 @@ func main() {
 	log.Info("starting server", "port", envPort, "devMode", envDevMode)
 	if err := srv.Start(); err != nil {
 		log.Error("server stopped", "error", err)
+		hub.Close()
 		os.Exit(1)
 	}
 }

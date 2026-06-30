@@ -138,7 +138,7 @@ func TestReportCalendarQuery_IncludesICS(t *testing.T) {
 		StartAt: time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC),
 		EndAt:   time.Date(2026, 6, 29, 10, 30, 0, 0, time.UTC),
 	}}
-	out := reportCalendarQuery("uid-1", cal, events)
+	out := reportCalendarQuery("uid-1", cal, events, nil)
 	mustContain(t, out, "/dav/calendars/uid-1/cal-1/ev-1.ics")
 	mustContain(t, out, `"etag-001"`)
 	mustContain(t, out, "C:calendar-data")
@@ -156,7 +156,7 @@ func TestReportCalendarMultiget_Found(t *testing.T) {
 		Status: "confirmed", StartAt: time.Now(), EndAt: time.Now().Add(time.Hour),
 	}
 	hrefs := []string{"/dav/calendars/uid-1/cal-1/ev-1.ics"}
-	out := reportCalendarMultiget("uid-1", cal, map[string]*repo.Event{hrefs[0]: e}, hrefs)
+	out := reportCalendarMultiget("uid-1", cal, map[string]*repo.Event{hrefs[0]: e}, hrefs, nil)
 	mustContain(t, out, "/dav/calendars/uid-1/cal-1/ev-1.ics")
 	mustContain(t, out, `"etag-001"`)
 	mustContain(t, out, "BEGIN:VCALENDAR")
@@ -166,7 +166,7 @@ func TestReportCalendarMultiget_Found(t *testing.T) {
 func TestReportCalendarMultiget_NotFound(t *testing.T) {
 	cal := &repo.Calendar{ID: "cal-1", Name: "Test"}
 	hrefs := []string{"/dav/calendars/uid-1/cal-1/missing.ics"}
-	out := reportCalendarMultiget("uid-1", cal, map[string]*repo.Event{}, hrefs)
+	out := reportCalendarMultiget("uid-1", cal, map[string]*repo.Event{}, hrefs, nil)
 	mustContain(t, out, "404 Not Found")
 	if strings.Contains(out, "BEGIN:VCALENDAR") {
 		t.Error("404 response must not contain ICS data")

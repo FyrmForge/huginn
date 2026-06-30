@@ -610,7 +610,6 @@ func extractSyncToken(body []byte) string {
 	return strings.TrimSpace(string(m[1]))
 }
 
-var reXMLText = regexp.MustCompile(`<[^>]*(%s)[^>]*>([^<]+)<`)
 
 func extractXMLText(body []byte, tag string) string {
 	re := regexp.MustCompile(`<[^>]*` + regexp.QuoteMeta(tag) + `[^>]*>([^<]+)<`)
@@ -673,17 +672,17 @@ func propfindCalendarHomeDepth0(userID string) string {
 
 func propfindCalendarHome(userID string, calendars []*repo.Calendar) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<multistatus %s>`, davNS))
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `<multistatus %s>`, davNS)
+	fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/</href>
     <propstat>
       <prop><resourcetype><collection/></resourcetype></prop>
       <status>HTTP/1.1 200 OK</status>
     </propstat>
-  </response>`, userID))
+  </response>`, userID)
 	for _, cal := range calendars {
-		sb.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/%s/</href>
     <propstat>
@@ -699,7 +698,7 @@ func propfindCalendarHome(userID string, calendars []*repo.Calendar) string {
       </prop>
       <status>HTTP/1.1 200 OK</status>
     </propstat>
-  </response>`, userID, cal.ID, xmlEscape(cal.Name), xmlEscape(cal.UpdatedAt.Format(time.RFC3339Nano)), xmlEscape(cal.Color)))
+  </response>`, userID, cal.ID, xmlEscape(cal.Name), xmlEscape(cal.UpdatedAt.Format(time.RFC3339Nano)), xmlEscape(cal.Color))
 	}
 	sb.WriteString("\n</multistatus>")
 	return sb.String()
@@ -737,8 +736,8 @@ func propfindCalendar(userID string, cal *repo.Calendar, events []*repo.Event) s
 	stamp := maxStamp(cal, events)
 	token := buildSyncToken(cal.ID, stamp)
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<multistatus %s>`, davNS))
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `<multistatus %s>`, davNS)
+	fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/%s/</href>
     <propstat>
@@ -760,9 +759,9 @@ func propfindCalendar(userID string, cal *repo.Calendar, events []*repo.Event) s
     </propstat>
   </response>`, userID, cal.ID,
 		xmlEscape(cal.Name), xmlEscape(cal.Description), xmlEscape(cal.Color),
-		xmlEscape(stamp.Format(time.RFC3339Nano)), xmlEscape(token), supportedReportSet()))
+		xmlEscape(stamp.Format(time.RFC3339Nano)), xmlEscape(token), supportedReportSet())
 	for _, e := range events {
-		sb.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/%s/%s.ics</href>
     <propstat>
@@ -773,7 +772,7 @@ func propfindCalendar(userID string, cal *repo.Calendar, events []*repo.Event) s
       </prop>
       <status>HTTP/1.1 200 OK</status>
     </propstat>
-  </response>`, userID, cal.ID, e.ID, e.ETag))
+  </response>`, userID, cal.ID, e.ID, e.ETag)
 	}
 	sb.WriteString("\n</multistatus>")
 	return sb.String()
@@ -797,8 +796,8 @@ func propfindEventResource(userID, calID string, e *repo.Event) string {
 
 func reportCalendarQuery(userID string, cal *repo.Calendar, events []*repo.Event, exsByMaster map[string][]*repo.EventException) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<multistatus %s>`, davNS))
-	sb.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&sb, `<multistatus %s>`, davNS)
+	fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/%s/</href>
     <propstat>
@@ -808,11 +807,11 @@ func reportCalendarQuery(userID string, cal *repo.Calendar, events []*repo.Event
       </prop>
       <status>HTTP/1.1 200 OK</status>
     </propstat>
-  </response>`, userID, cal.ID, xmlEscape(cal.Name)))
+  </response>`, userID, cal.ID, xmlEscape(cal.Name))
 	for _, e := range events {
 		var buf bytes.Buffer
 		_ = ics.WriteWithExceptions(&buf, cal.Name, []*repo.Event{e}, exsByMaster)
-		sb.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/%s/%s.ics</href>
     <propstat>
@@ -822,7 +821,7 @@ func reportCalendarQuery(userID string, cal *repo.Calendar, events []*repo.Event
       </prop>
       <status>HTTP/1.1 200 OK</status>
     </propstat>
-  </response>`, userID, cal.ID, e.ID, e.ETag, xmlEscape(buf.String())))
+  </response>`, userID, cal.ID, e.ID, e.ETag, xmlEscape(buf.String()))
 	}
 	sb.WriteString("\n</multistatus>")
 	return sb.String()
@@ -830,20 +829,20 @@ func reportCalendarQuery(userID string, cal *repo.Calendar, events []*repo.Event
 
 func reportCalendarMultiget(userID string, cal *repo.Calendar, eventMap map[string]*repo.Event, hrefs []string, exsByMaster map[string][]*repo.EventException) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<multistatus %s>`, davNS))
+	fmt.Fprintf(&sb, `<multistatus %s>`, davNS)
 	for _, href := range hrefs {
 		e := eventMap[href]
 		if e == nil {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
   <response>
     <href>%s</href>
     <status>HTTP/1.1 404 Not Found</status>
-  </response>`, xmlEscape(href)))
+  </response>`, xmlEscape(href))
 			continue
 		}
 		var buf bytes.Buffer
 		_ = ics.WriteWithExceptions(&buf, cal.Name, []*repo.Event{e}, exsByMaster)
-		sb.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&sb, `
   <response>
     <href>%s</href>
     <propstat>
@@ -853,7 +852,7 @@ func reportCalendarMultiget(userID string, cal *repo.Calendar, eventMap map[stri
       </prop>
       <status>HTTP/1.1 200 OK</status>
     </propstat>
-  </response>`, xmlEscape(href), e.ETag, xmlEscape(buf.String())))
+  </response>`, xmlEscape(href), e.ETag, xmlEscape(buf.String()))
 	}
 	sb.WriteString("\n</multistatus>")
 	return sb.String()
@@ -861,17 +860,17 @@ func reportCalendarMultiget(userID string, cal *repo.Calendar, eventMap map[stri
 
 func reportSyncCollection(userID string, cal *repo.Calendar, events []*repo.Event, newToken string) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<multistatus %s>`, davNS))
+	fmt.Fprintf(&sb, `<multistatus %s>`, davNS)
 	for _, e := range events {
 		if e.DeletedAt != nil {
-			sb.WriteString(fmt.Sprintf(`
+			fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/%s/%s.ics</href>
     <status>HTTP/1.1 404 Not Found</status>
-  </response>`, userID, cal.ID, e.ID))
+  </response>`, userID, cal.ID, e.ID)
 			continue
 		}
-		sb.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&sb, `
   <response>
     <href>/dav/calendars/%s/%s/%s.ics</href>
     <propstat>
@@ -880,10 +879,10 @@ func reportSyncCollection(userID string, cal *repo.Calendar, events []*repo.Even
       </prop>
       <status>HTTP/1.1 200 OK</status>
     </propstat>
-  </response>`, userID, cal.ID, e.ID, e.ETag))
+  </response>`, userID, cal.ID, e.ID, e.ETag)
 	}
-	sb.WriteString(fmt.Sprintf(`
-  <sync-token>%s</sync-token>`, xmlEscape(newToken)))
+	fmt.Fprintf(&sb, `
+  <sync-token>%s</sync-token>`, xmlEscape(newToken))
 	sb.WriteString("\n</multistatus>")
 	return sb.String()
 }

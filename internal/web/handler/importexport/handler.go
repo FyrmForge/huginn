@@ -60,7 +60,7 @@ func (h *handler) Import(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	count, err := h.importExportService.ImportICS(c.Request().Context(), user.ID, calendarID, src)
 	if err != nil {

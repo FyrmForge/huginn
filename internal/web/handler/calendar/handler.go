@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/FyrmForge/hamr/pkg/middleware"
 	"github.com/FyrmForge/hamr/pkg/respond"
 	"github.com/labstack/echo/v4"
 
@@ -190,9 +189,6 @@ type monthViewData struct {
 	Month     time.Month
 }
 
-func flash(c echo.Context) *middleware.FlashMessage {
-	return middleware.GetFlash(c)
-}
 
 // WeekOccurrence wraps an occurrence with its pixel offsets within a 1440px day column.
 type WeekOccurrence struct {

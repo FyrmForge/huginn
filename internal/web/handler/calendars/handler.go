@@ -61,7 +61,9 @@ func (h *handler) Create(c echo.Context) error {
 	}
 
 	var f CalendarForm
-	c.Bind(&f)
+	if err := c.Bind(&f); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest)
+	}
 
 	if errs := h.CreateFormRules.Validate(c); errs != nil {
 		return respond.HTML(c, http.StatusUnprocessableEntity, calendarFormPage(c, f, errs, nil, ""))
@@ -114,7 +116,9 @@ func (h *handler) Update(c echo.Context) error {
 	}
 
 	var f CalendarForm
-	c.Bind(&f)
+	if err := c.Bind(&f); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest)
+	}
 
 	if errs := h.EditFormRules.Validate(c); errs != nil {
 		return respond.HTML(c, http.StatusUnprocessableEntity, calendarFormPage(c, f, errs, nil, c.Param("id")))
