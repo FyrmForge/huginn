@@ -83,3 +83,4 @@ jobs:
           STACKR_URL: ${{ vars.STACKR_DEPLOY_URL }}
           STACKR_TOKEN: ${{ secrets.STACKR_TOKEN }}
           TAG: ${{ steps.ver.outputs.tag }}
+
