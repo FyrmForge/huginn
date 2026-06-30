@@ -62,6 +62,9 @@ templ eventForm(c echo.Context, f EventForm, calendars []*repo.Calendar, errors 
 			class="p-4 flex flex-col gap-3"
 		>
 			@form.CSRFField(c)
+			if rid != "" {
+				@scopeSelector(eventID, rid, scope)
+			}
 			@eventFields(f, calendars, errors)
 			<div class="flex justify-between pt-1">
 				<button
@@ -279,6 +282,20 @@ templ dayPill(code, label string, selected map[string]bool) {
 	}
 }
 
+// scopeSuffix describes which occurrences a delete affects, for the confirm copy.
+func scopeSuffix(scope string) string {
+	switch scope {
+	case "this":
+		return " (this occurrence)"
+	case "future":
+		return " (this and following)"
+	case "all":
+		return " (all occurrences)"
+	default:
+		return ""
+	}
+}
+
 func recurInterval(n int) int {
 	if n <= 0 {
 		return 1
@@ -293,104 +310,31 @@ func recurCount(n int) int {
 	return n
 }
 
-// scopeModal asks whether to edit this occurrence, this+future, or all.
-templ scopeModal(c echo.Context, eventID, rid string) {
-	<div
-		id="modal-backdrop"
-		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
-	>
-		<div class="bg-huginn-surface border border-huginn-line w-full max-w-sm mx-4 flex flex-col">
-			<div class="flex items-center px-4 py-3 border-b border-huginn-line">
-				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">edit recurring event</span>
-			</div>
-			<div class="flex flex-col gap-2 p-4">
-				<button
-					class="btn text-left flex flex-col"
-					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=this", eventID, rid) }
-					hx-target="#modal-root"
-					hx-swap="innerHTML"
-				>
-					<span class="text-xs font-medium">this event</span>
-					<span class="text-[10px] text-huginn-mute">only this occurrence</span>
-				</button>
-				<button
-					class="btn text-left flex flex-col"
-					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=future", eventID, rid) }
-					hx-target="#modal-root"
-					hx-swap="innerHTML"
-				>
-					<span class="text-xs font-medium">this and following events</span>
-					<span class="text-[10px] text-huginn-mute">from this occurrence onward</span>
-				</button>
-				<button
-					class="btn text-left flex flex-col"
-					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=all", eventID, rid) }
-					hx-target="#modal-root"
-					hx-swap="innerHTML"
-				>
-					<span class="text-xs font-medium">all events</span>
-					<span class="text-[10px] text-huginn-mute">every occurrence in the series</span>
-				</button>
-			</div>
-			<div class="px-4 pb-4">
-				<button class="btn w-full" hx-get="/events/close" hx-target="#modal-root" hx-swap="innerHTML">cancel</button>
-			</div>
+// scopeSelector is the in-modal segmented control choosing which occurrences an
+// edit/delete applies to. Switching reloads the form for that scope's data.
+templ scopeSelector(eventID, rid, scope string) {
+	<div class="flex flex-col gap-1.5">
+		<label class="text-xs text-huginn-dim">apply to</label>
+		<div class="flex border border-huginn-line rounded overflow-hidden text-[11px]">
+			@scopeSegment(eventID, rid, "this", "this event", scope)
+			@scopeSegment(eventID, rid, "future", "this + following", scope)
+			@scopeSegment(eventID, rid, "all", "all events", scope)
 		</div>
 	</div>
 }
 
-// deleteScopeModal asks whether to delete this occurrence, this+future, or all.
-templ deleteScopeModal(eventID, rid, eventTitle string) {
-	<div
-		id="modal-backdrop"
-		class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
-	>
-		<div class="bg-huginn-surface border border-huginn-line w-full max-w-sm mx-4 flex flex-col">
-			<div class="flex items-center px-4 py-3 border-b border-huginn-line">
-				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">delete recurring event</span>
-			</div>
-			<div class="px-4 pt-3 text-xs text-huginn-dim">
-				delete <span class="text-huginn-fg font-medium">{ eventTitle }</span>?
-			</div>
-			<div class="flex flex-col gap-2 p-4">
-				<button
-					class="btn text-left flex flex-col"
-					hx-delete={ fmt.Sprintf("/events/%s?rid=%s&scope=this", eventID, rid) }
-					hx-target="#modal-root"
-					hx-swap="innerHTML"
-				>
-					<span class="text-xs font-medium text-huginn-danger">this event</span>
-					<span class="text-[10px] text-huginn-mute">only this occurrence</span>
-				</button>
-				<button
-					class="btn text-left flex flex-col"
-					hx-delete={ fmt.Sprintf("/events/%s?rid=%s&scope=future", eventID, rid) }
-					hx-target="#modal-root"
-					hx-swap="innerHTML"
-				>
-					<span class="text-xs font-medium text-huginn-danger">this and following events</span>
-					<span class="text-[10px] text-huginn-mute">from this occurrence onward</span>
-				</button>
-				<button
-					class="btn text-left flex flex-col"
-					hx-delete={ fmt.Sprintf("/events/%s", eventID) }
-					hx-target="#modal-root"
-					hx-swap="innerHTML"
-				>
-					<span class="text-xs font-medium text-huginn-danger">all events</span>
-					<span class="text-[10px] text-huginn-mute">every occurrence in the series</span>
-				</button>
-			</div>
-			<div class="px-4 pb-4">
-				<button
-					class="btn w-full"
-					hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=this", eventID, rid) }
-					hx-target="#modal-root"
-					hx-swap="innerHTML"
-				>cancel</button>
-			</div>
-		</div>
-	</div>
+templ scopeSegment(eventID, rid, val, label, current string) {
+	if val == current {
+		<span class="flex-1 px-2 py-1.5 text-center bg-huginn-accent text-huginn-bg font-medium">{ label }</span>
+	} else {
+		<button
+			type="button"
+			class="flex-1 px-2 py-1.5 text-center text-huginn-mute hover:bg-huginn-panel hover:text-huginn-fg border-l border-huginn-line first:border-l-0"
+			hx-get={ fmt.Sprintf("/events/%s/edit?rid=%s&scope=%s", eventID, rid, val) }
+			hx-target="#modal-root"
+			hx-swap="innerHTML"
+		>{ label }</button>
+	}
 }
 
 // confirmDeleteModal asks for confirmation before deleting a non-recurring event.
@@ -404,7 +348,7 @@ templ confirmDeleteModal(eventID, eventTitle, rid, scope string) {
 				<span class="text-xs font-medium text-huginn-fg uppercase tracking-wider">delete event</span>
 			</div>
 			<div class="px-4 py-4 text-xs text-huginn-dim">
-				delete <span class="text-huginn-fg font-medium">{ eventTitle }</span>? this can't be undone.
+				delete <span class="text-huginn-fg font-medium">{ eventTitle }</span>{ scopeSuffix(scope) }? this can't be undone.
 			</div>
 			<div class="flex justify-between px-4 pb-4">
 				<button

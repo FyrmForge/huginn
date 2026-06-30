@@ -148,9 +148,10 @@ func (h *handler) Edit(c echo.Context) error {
 	rid := c.QueryParam("rid")
 	scope := c.QueryParam("scope")
 
-	// If recurring and rid present with no scope: show scope picker.
+	// Recurring occurrence with no scope yet: default to this single occurrence.
+	// The scope selector lives inside the modal; switching it reloads the form.
 	if e.RRule != "" && rid != "" && scope == "" {
-		return respond.HTML(c, http.StatusOK, scopeModal(c, e.ID, rid))
+		scope = "this"
 	}
 
 	// Check user can edit this event's calendar; viewers get a read-only modal.
@@ -243,8 +244,10 @@ func (h *handler) ConfirmDelete(c echo.Context) error {
 	}
 	rid := c.QueryParam("rid")
 	scope := c.QueryParam("scope")
+	// Recurring occurrence: scope was chosen in the edit modal; default to this
+	// occurrence so an empty scope never falls through to deleting the series.
 	if e.RRule != "" && rid != "" && scope == "" {
-		return respond.HTML(c, http.StatusOK, deleteScopeModal(e.ID, rid, e.Title))
+		scope = "this"
 	}
 	return respond.HTML(c, http.StatusOK, confirmDeleteModal(e.ID, e.Title, rid, scope))
 }
