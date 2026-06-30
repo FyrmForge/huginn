@@ -12,6 +12,8 @@ FROM alpine:3.21
 RUN apk --no-cache add ca-certificates
 COPY --from=builder /site /site
 COPY --from=builder /app/static /static
+# Fingerprinted CSS/JS (WithStaticDistDir) — served from disk, not embedded.
+COPY --from=builder /app/dist /dist
 
 EXPOSE 8080
 ENTRYPOINT ["/site"]

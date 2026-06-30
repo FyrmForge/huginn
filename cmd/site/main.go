@@ -26,6 +26,8 @@ import (
 	"github.com/FyrmForge/huginn/internal/web/components"
 )
 
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
 
 var (
 	envPort                = config.GetEnvOrDefaultInt("PORT", 8080)
@@ -204,7 +206,7 @@ func main() {
 		Hub:                 hub,
 	})
 
-	log.Info("starting server", "port", envPort, "devMode", envDevMode)
+	log.Info("starting server", "version", version, "port", envPort, "devMode", envDevMode)
 	if err := srv.Start(); err != nil {
 		log.Error("server stopped", "error", err)
 		hub.Close()
