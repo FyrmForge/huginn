@@ -18,7 +18,7 @@ templ monthPage(c echo.Context, d monthViewData) {
 		<div class="flex h-full">
 			@calendarSidebar(c, d.Calendars)
 			<div class="flex-1 flex flex-col min-w-0">
-				@monthGrid(d.Weeks, d.Year, d.Month)
+				@monthGrid(d.Weeks, d.Year, d.Month, calendarMap(d.Calendars))
 			</div>
 		</div>
 	}
@@ -57,7 +57,7 @@ templ calendarSidebar(c echo.Context, calendars []*repo.Calendar) {
 	</aside>
 }
 
-templ monthGrid(weeks []MonthWeek, year int, month time.Month) {
+templ monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*repo.Calendar) {
 	<div id="cal-grid" class="flex flex-col flex-1 min-h-0">
 		<!-- Header: nav + month label -->
 		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
@@ -121,7 +121,7 @@ templ monthGrid(weeks []MonthWeek, year int, month time.Month) {
 		<!-- Week rows -->
 		<div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
 			for _, week := range weeks {
-				@monthWeekRow(week)
+				@monthWeekRow(week, cals)
 			}
 		</div>
 	</div>
@@ -139,20 +139,20 @@ templ monthGrid(weeks []MonthWeek, year int, month time.Month) {
 
 // monthWeekRow renders one week: a 7-column grid of day cells plus the
 // multi-day span bars layered over them.
-templ monthWeekRow(week MonthWeek) {
+templ monthWeekRow(week MonthWeek, cals map[string]*repo.Calendar) {
 	<div class="flex-1 min-h-0 relative">
 		<div class="grid grid-cols-7 h-full">
 			for _, day := range week.Days {
-				@monthDayCol(day, week.Lanes)
+				@monthDayCol(day, week.Lanes, cals)
 			}
 		</div>
 		for _, bar := range week.Bars {
-			@spanBar(bar, 18)
+			@spanBar(bar, 18, cals)
 		}
 	</div>
 }
 
-templ monthDayCol(day MonthDay, lanes int) {
+templ monthDayCol(day MonthDay, lanes int, cals map[string]*repo.Calendar) {
 	<div
 		class={
 			"relative border-b border-r border-huginn-line px-1 pb-1 min-h-0 flex flex-col cursor-pointer group transition-colors hover:bg-huginn-panel/20 overflow-hidden",
@@ -163,6 +163,7 @@ templ monthDayCol(day MonthDay, lanes int) {
 		hx-get={ fmt.Sprintf("/events/new?date=%s", day.Date.Format("2006-01-02")) }
 		hx-target="#modal-root"
 		hx-swap="innerHTML"
+		data-date={ day.Date.Format("2006-01-02") }
 	>
 		<span class="absolute top-1 left-1.5 text-[11px] leading-none text-huginn-mute opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none">+</span>
 		<span
@@ -178,19 +179,10 @@ templ monthDayCol(day MonthDay, lanes int) {
 		if lanes > 0 {
 			<div style={ fmt.Sprintf("height:%dpx", lanes*22) }></div>
 		}
-		<div class="flex flex-col gap-0.5 overflow-hidden">
-			for _, o := range cellVisibleChips(day.Events, lanes) {
-				@occurrenceChip(o)
-			}
-			if n := cellMoreCount(day.Events, lanes); n > 0 {
-				<button
-					class="text-[10px] text-left text-huginn-mute hover:text-huginn-accent pl-1.5 truncate transition-colors"
-					hx-get={ weekGridURLForDate(day.Date) }
-					hx-target="#cal-grid"
-					hx-swap="outerHTML"
-					hx-trigger="click consume"
-					hx-push-url={ weekURLForDate(day.Date) }
-				>+{ fmt.Sprint(n) } more</button>
+		<!-- all chips render; main.js (fitDayCells) hides any overflow into "+N more". -->
+		<div data-chips class="flex flex-col gap-0.5 flex-1 min-h-0 overflow-hidden">
+			for _, o := range day.Events {
+				@occurrenceChip(o, cals)
 			}
 		</div>
 	</div>
@@ -198,9 +190,10 @@ templ monthDayCol(day MonthDay, lanes int) {
 
 // spanBar draws a single multi-day bar. topBase is the y-offset before lanes
 // (leaves room for the day number in the month grid).
-templ spanBar(bar SpanBar, topBase int) {
+templ spanBar(bar SpanBar, topBase int, cals map[string]*repo.Calendar) {
 	<button
 		data-event-cal={ bar.Occ.CalendarID() }
+		{ evCardAttrs(bar.Occ, cals)... }
 		class="absolute z-10 text-[10px] leading-none truncate flex items-center rounded-sm pl-1.5 pr-1 transition-colors"
 		style={ spanBarStyle(bar, topBase) }
 		hx-get={ occurrenceEditURL(bar.Occ) }
@@ -210,10 +203,11 @@ templ spanBar(bar SpanBar, topBase int) {
 	>{ bar.Occ.Title }</button>
 }
 
-templ occurrenceChip(o service.Occurrence) {
+templ occurrenceChip(o service.Occurrence, cals map[string]*repo.Calendar) {
 	<button
 		class="w-full text-left text-[10px] pl-2 pr-1.5 py-0.5 rounded-r-sm truncate transition-colors"
 		data-event-cal={ o.CalendarID() }
+		{ evCardAttrs(o, cals)... }
 		hx-get={ occurrenceEditURL(o) }
 		hx-target="#modal-root"
 		hx-swap="innerHTML"
@@ -226,13 +220,13 @@ templ weekPage(c echo.Context, d weekViewData) {
 		<div class="flex h-full">
 			@calendarSidebar(c, d.Calendars)
 			<div class="flex-1 flex flex-col min-w-0">
-				@weekGrid(d.Week, d.WeekStart)
+				@weekGrid(d.Week, d.WeekStart, calendarMap(d.Calendars))
 			</div>
 		</div>
 	}
 }
 
-templ weekGrid(week WeekData, weekStart time.Time) {
+templ weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar) {
 	<div id="week-grid" class="flex flex-col flex-1 min-h-0">
 		<!-- Header: nav + view switcher -->
 		<div class="flex items-center justify-between px-4 py-2 border-b border-huginn-line shrink-0">
@@ -313,20 +307,20 @@ templ weekGrid(week WeekData, weekStart time.Time) {
 						}
 					</div>
 					for _, bar := range week.Bars {
-						@spanBar(bar, 2)
+						@spanBar(bar, 2, cals)
 					}
 				</div>
 			</div>
 		}
 		<!-- Scrollable time grid -->
 		<div class="relative flex flex-1 overflow-y-auto" id="week-time-grid">
-			<!-- Hour labels -->
-			<div class="w-12 shrink-0 relative" style="height: 1440px;">
+			<!-- Hour labels (drag this gutter vertically to expand/compress the timeline) -->
+			<div id="week-hour-gutter" class="w-12 shrink-0 relative cursor-ns-resize select-none" style="height: calc(var(--ppm,1) * 1440px);" title="Drag to expand/compress">
 				for _, hr := range weekHours() {
 					if hr > 0 {
 						<div
-							style={ fmt.Sprintf("position: absolute; top: %dpx; right: 6px;", hr*60) }
-							class="text-[9px] text-huginn-mute leading-none -translate-y-2"
+							style={ fmt.Sprintf("position: absolute; top: calc(var(--ppm,1) * %dpx); right: 6px;", hr*60) }
+							class="text-[9px] text-huginn-mute leading-none -translate-y-2 pointer-events-none"
 						>{ fmt.Sprintf("%02d:00", hr) }</div>
 					}
 				}
@@ -339,18 +333,19 @@ templ weekGrid(week WeekData, weekStart time.Time) {
 						templ.KV("bg-huginn-accent/[0.06]", day.IsToday),
 						templ.KV("bg-huginn-surface/30", isWeekend(day.Date) && !day.IsToday),
 					}
-					style="height: 1440px;"
+					style="height: calc(var(--ppm,1) * 1440px);"
 				>
 					for _, hr := range weekHours() {
 						<div
-							style={ fmt.Sprintf("position: absolute; top: %dpx; left: 0; right: 0;", hr*60) }
+							style={ fmt.Sprintf("position: absolute; top: calc(var(--ppm,1) * %dpx); left: 0; right: 0;", hr*60) }
 							class="border-t border-huginn-line/30"
 						></div>
 					}
 					for _, we := range day.Timed {
 						<button
 							data-event-cal={ we.Occ.CalendarID() }
-							style={ fmt.Sprintf("position: absolute; top: %dpx; height: %dpx; left: 2px; right: 2px;", we.TopPx, we.HeightPx) }
+							{ evCardAttrs(we.Occ, cals)... }
+							style={ fmt.Sprintf("position: absolute; top: calc(var(--ppm,1) * %dpx); height: calc(var(--ppm,1) * %dpx); left: 2px; right: 2px;", we.TopPx, we.HeightPx) }
 							class="w-full text-left text-[10px] px-1.5 py-0.5 rounded-sm overflow-hidden transition-colors"
 							hx-get={ occurrenceEditURL(we.Occ) }
 							hx-target="#modal-root"
@@ -413,51 +408,6 @@ func todayWeekdayShort(weeks []MonthWeek) string {
 	return ""
 }
 
-// maxCellRows is the vertical event budget per month-view day cell: span-bar
-// lanes plus single-day chips. Beyond it, extra chips collapse into "+N more".
-// ponytail: fixed heuristic tuned for desktop; a JS height-measure would adapt
-// per viewport, add that only if cells visibly overflow on small screens.
-const maxCellRows = 5
-
-// chipBudget is how many single-day chips a cell shows before the "+N more" row,
-// shrinking as the week's bars take more lanes.
-func chipBudget(lanes int) int {
-	rows := maxCellRows - lanes
-	if rows < 1 {
-		rows = 1
-	}
-	return rows
-}
-
-// cellVisibleChips returns the single-day events to render in the cell.
-func cellVisibleChips(events []service.Occurrence, lanes int) []service.Occurrence {
-	rows := chipBudget(lanes)
-	if len(events) <= rows {
-		return events
-	}
-	return events[:rows-1] // leave one row for the "+N more" indicator
-}
-
-// cellMoreCount returns how many events are hidden behind "+N more" (0 = none).
-func cellMoreCount(events []service.Occurrence, lanes int) int {
-	rows := chipBudget(lanes)
-	if len(events) <= rows {
-		return 0
-	}
-	return len(events) - (rows - 1)
-}
-
-func mondayOf(t time.Time) time.Time {
-	wd := int(t.Weekday())
-	if wd == 0 {
-		wd = 7
-	}
-	return t.AddDate(0, 0, -(wd - 1))
-}
-
-func weekGridURLForDate(t time.Time) string { return "/week/grid?week=" + mondayOf(t).Format("2006-01-02") }
-func weekURLForDate(t time.Time) string     { return "/week?week=" + mondayOf(t).Format("2006-01-02") }
-
 // spanBarStyle positions a multi-day bar: left/width from its column span,
 // top from its lane (offset by topBase), with squared edges where it continues
 // into an adjacent week.
@@ -471,6 +421,39 @@ func spanBarStyle(b SpanBar, topBase int) string {
 		s += "border-top-right-radius:0;border-bottom-right-radius:0;"
 	}
 	return s
+}
+
+// occTimeLabel renders a human-readable time range for the hover detail card.
+func occTimeLabel(o service.Occurrence) string {
+	if o.AllDay {
+		s, e := occDayRange(o)
+		if e.After(s) {
+			return s.Format("Mon Jan 2") + " – " + e.Format("Mon Jan 2")
+		}
+		return "All day"
+	}
+	s := o.Start.UTC()
+	e := o.End.UTC()
+	if s.Truncate(24 * time.Hour).Equal(e.Truncate(24 * time.Hour)) {
+		return s.Format("Mon Jan 2") + " · " + s.Format("15:04") + " – " + e.Format("15:04")
+	}
+	return s.Format("Mon Jan 2, 15:04") + " – " + e.Format("Mon Jan 2, 15:04")
+}
+
+// evCardAttrs are the data-* attributes the hover detail card (main.js) reads.
+func evCardAttrs(o service.Occurrence, cals map[string]*repo.Calendar) templ.Attributes {
+	a := templ.Attributes{
+		"data-ev-card":  true,
+		"data-ev-title": o.Title,
+		"data-ev-time":  occTimeLabel(o),
+		"data-ev-loc":   o.Location,
+		"data-ev-desc":  o.Description,
+	}
+	if c := cals[o.CalendarID()]; c != nil {
+		a["data-ev-cal-name"] = c.Name
+		a["data-ev-cal-color"] = c.Color
+	}
+	return a
 }
 
 func calendarColorCSS(calendars []*repo.Calendar) string {

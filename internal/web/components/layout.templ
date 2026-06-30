@@ -56,6 +56,11 @@ templ AppLayout(c echo.Context, title string) {
 			{ children... }
 		</main>
 		@NavDrawer(c)
+		<!-- Event hover detail card (positioned + filled by main.js). -->
+		<!-- Event hover detail card (one block, built by main.js). -->
+		<div id="ev-card" class="hidden fixed z-50 pointer-events-none w-64 max-w-[80vw] p-3 bg-huginn-surface border border-huginn-line rounded shadow-lg shadow-black/40"></div>
+		<!-- "+N more" hover popover: the same card blocks, stacked. -->
+		<div id="more-card" class="hidden fixed z-50 pointer-events-none w-64 max-w-[80vw] max-h-[80vh] overflow-y-auto p-3 bg-huginn-surface border border-huginn-line rounded shadow-lg shadow-black/40"></div>
 		<script src={ StaticURL("js/htmx.min.js") }></script>
 		<script src={ StaticURL("js/main.js") }></script>
 		<script src={ StaticURL("js/nav.js") }></script>

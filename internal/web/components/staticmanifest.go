@@ -4,10 +4,10 @@ package components
 
 // StaticManifest maps original asset paths to fingerprinted paths.
 var StaticManifest = map[string]string{
-	"css/output.css": "css/output.90144bcc874f.css",
+	"css/output.css": "css/output.1d32080719db.css",
 	"js/htmx.min.js": "js/htmx.min.e209dda5c823.js",
 	"js/idiomorph.min.js": "js/idiomorph.min.cfbc37ff80a7.js",
-	"js/main.js": "js/main.d9c5957d7a44.js",
+	"js/main.js": "js/main.9d69b3f565ac.js",
 	"js/nav.js": "js/nav.372ba98534fe.js",
 	"js/ws.js": "js/ws.a52c0d4e3a5a.js",
 }

@@ -80,11 +80,11 @@ func (h *handler) WeekGrid(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized)
 	}
 	weekStart := currentWeekStart(c)
-	_, occs, err := h.loadWeekData(c, user, weekStart)
+	calendars, occs, err := h.loadWeekData(c, user, weekStart)
 	if err != nil {
 		return err
 	}
-	return respond.HTML(c, http.StatusOK, weekGrid(buildWeekGrid(weekStart, occs), weekStart))
+	return respond.HTML(c, http.StatusOK, weekGrid(buildWeekGrid(weekStart, occs), weekStart, calendarMap(calendars)))
 }
 
 // GET /calendar/grid?year=&month= — HTMX partial swap for prev/next navigation.
@@ -95,11 +95,20 @@ func (h *handler) Grid(c echo.Context) error {
 	}
 
 	year, month := currentYearMonth(c)
-	_, occs, err := h.loadMonthData(c, user, year, month)
+	calendars, occs, err := h.loadMonthData(c, user, year, month)
 	if err != nil {
 		return err
 	}
-	return respond.HTML(c, http.StatusOK, monthGrid(buildMonthWeeks(year, month, occs), year, month))
+	return respond.HTML(c, http.StatusOK, monthGrid(buildMonthWeeks(year, month, occs), year, month, calendarMap(calendars)))
+}
+
+// calendarMap indexes calendars by ID for quick name/colour lookup at render.
+func calendarMap(cals []*repo.Calendar) map[string]*repo.Calendar {
+	m := make(map[string]*repo.Calendar, len(cals))
+	for _, c := range cals {
+		m[c.ID] = c
+	}
+	return m
 }
 
 func (h *handler) loadMonthData(c echo.Context, user *repo.User, year int, month time.Month) ([]*repo.Calendar, []service.Occurrence, error) {
