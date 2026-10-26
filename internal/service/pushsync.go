@@ -28,6 +28,11 @@ type Snapshot struct {
 	Name   string          `json:"name"`
 	Color  string          `json:"color"`
 	Events []SnapshotEvent `json:"events"`
+	// From/To is the window the device read events from. Only events
+	// overlapping it are pruned, so history older than the window survives.
+	// Zero = unbounded on that side.
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
 }
 
 type SnapshotEvent struct {
@@ -106,9 +111,7 @@ func (s *PushSyncService) ApplySnapshot(ctx context.Context, userID, externalID 
 		res.Updated++
 	}
 
-	// ponytail: full-snapshot prune; add a `since` window on the agent if a
-	// calendar ever grows past tens of thousands of events.
-	deleted, err := s.store.DeleteEventsNotIn(ctx, cal.ID, keep)
+	deleted, err := s.store.DeleteEventsNotIn(ctx, cal.ID, keep, snap.From, snap.To)
 	if err != nil {
 		return res, fmt.Errorf("prune: %w", err)
 	}

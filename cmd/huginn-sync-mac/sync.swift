@@ -55,7 +55,8 @@ func snapshot(_ cal: EKCalendar) -> [String: Any] {
             "all_day": e.isAllDay,
         ]
     }
-    return ["name": cal.title, "color": hex(cal.cgColor), "events": events]
+    return ["name": cal.title, "color": hex(cal.cgColor), "events": events,
+            "from": iso.string(from: from), "to": iso.string(from: to)]
 }
 
 func put(_ cal: EKCalendar, _ body: [String: Any]) {

@@ -22,3 +22,4 @@ One-way push of all Calendar.app calendars (local, iCloud, Google, …) to hugin
 
 Window: 1 year back, 2 years ahead (`HUGINN_PAST_DAYS` / `HUGINN_FUTURE_DAYS`).
 Synced calendars show up in huginn read-only; events removed on the Mac are removed on huginn.
+Events older than the window are kept on huginn, not pruned.

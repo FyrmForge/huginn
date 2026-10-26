@@ -104,12 +104,15 @@ func (s *Store) DeleteEvent(ctx context.Context, id string) error {
 }
 
 // DeleteEventsNotIn soft-deletes every live event in the calendar whose UID is
-// not in keepUIDs. Used by push sync to prune events removed on the device.
-func (s *Store) DeleteEventsNotIn(ctx context.Context, calendarID string, keepUIDs []string) (int, error) {
+// not in keepUIDs and that overlaps [from, to). Zero from/to = unbounded. Used
+// by push sync to prune events removed on the device.
+func (s *Store) DeleteEventsNotIn(ctx context.Context, calendarID string, keepUIDs []string, from, to time.Time) (int, error) {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE events SET deleted_at = NOW(), updated_at = NOW()
-		 WHERE calendar_id = $1 AND deleted_at IS NULL AND NOT (uid = ANY($2))`,
-		calendarID, pq.Array(keepUIDs))
+		 WHERE calendar_id = $1 AND deleted_at IS NULL AND NOT (uid = ANY($2))
+		   AND ($3::timestamptz IS NULL OR end_at > $3)
+		   AND ($4::timestamptz IS NULL OR start_at < $4)`,
+		calendarID, pq.Array(keepUIDs), sql.NullTime{Time: from, Valid: !from.IsZero()}, sql.NullTime{Time: to, Valid: !to.IsZero()})
 	if err != nil {
 		return 0, err
 	}
