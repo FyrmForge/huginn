@@ -30,6 +30,7 @@ type Store interface {
 	// --- Calendars ---
 	CreateCalendar(ctx context.Context, cal *Calendar) error
 	GetCalendarByID(ctx context.Context, id string) (*Calendar, error)
+	GetCalendarByExternalID(ctx context.Context, ownerID, externalID string) (*Calendar, error)
 	ListCalendarsByUser(ctx context.Context, userID string) ([]*Calendar, error)
 	UpdateCalendar(ctx context.Context, cal *Calendar) error
 	DeleteCalendar(ctx context.Context, id string) error
@@ -80,6 +81,7 @@ type Store interface {
 	GetCalendarSyncStamp(ctx context.Context, calendarID string) (time.Time, error)
 	UpdateEvent(ctx context.Context, e *Event) error
 	DeleteEvent(ctx context.Context, id string) error
+	DeleteEventsNotIn(ctx context.Context, calendarID string, keepUIDs []string) (int, error)
 
 	// --- Event exceptions (recurring series overrides) ---
 	UpsertEventException(ctx context.Context, ex *EventException) error

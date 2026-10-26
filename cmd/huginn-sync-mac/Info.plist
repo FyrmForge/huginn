@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.fyrmforge.huginn-sync</string>
+  <key>CFBundleName</key><string>huginn-sync</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>Push your calendars to your huginn server.</string>
+  <key>NSCalendarsUsageDescription</key><string>Push your calendars to your huginn server.</string>
+</dict></plist>

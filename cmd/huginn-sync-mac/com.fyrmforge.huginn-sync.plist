@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.fyrmforge.huginn-sync</string>
+  <key>ProgramArguments</key><array><string>/usr/local/bin/huginn-sync</string></array>
+  <key>EnvironmentVariables</key><dict>
+    <key>HUGINN_URL</key><string>https://huginn.example.com</string>
+    <key>HUGINN_TOKEN</key><string>PASTE_APP_PASSWORD</string>
+  </dict>
+  <key>StartInterval</key><integer>900</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/tmp/huginn-sync.log</string>
+  <key>StandardErrorPath</key><string>/tmp/huginn-sync.log</string>
+</dict></plist>

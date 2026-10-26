@@ -12,10 +12,10 @@ func (s *Store) CreateCalendar(ctx context.Context, cal *repo.Calendar) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO calendars
 		    (id, owner_id, name, description, color, timezone,
-		     default_visibility, default_busy_status, is_default, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+		     default_visibility, default_busy_status, is_default, external_id, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
 		cal.ID, cal.OwnerID, cal.Name, cal.Description, cal.Color, cal.Timezone,
-		cal.DefaultVisibility, cal.DefaultBusyStatus, cal.IsDefault,
+		cal.DefaultVisibility, cal.DefaultBusyStatus, cal.IsDefault, cal.ExternalID,
 		cal.CreatedAt, cal.UpdatedAt,
 	)
 	return err
@@ -25,9 +25,25 @@ func (s *Store) GetCalendarByID(ctx context.Context, id string) (*repo.Calendar,
 	var c repo.Calendar
 	err := s.db.GetContext(ctx, &c,
 		`SELECT id, owner_id, name, description, color, timezone,
-		        default_visibility, default_busy_status, is_default,
+		        default_visibility, default_busy_status, is_default, external_id,
 		        deleted_at, created_at, updated_at
 		 FROM calendars WHERE id = $1 AND deleted_at IS NULL`, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (s *Store) GetCalendarByExternalID(ctx context.Context, ownerID, externalID string) (*repo.Calendar, error) {
+	var c repo.Calendar
+	err := s.db.GetContext(ctx, &c,
+		`SELECT id, owner_id, name, description, color, timezone,
+		        default_visibility, default_busy_status, is_default, external_id,
+		        deleted_at, created_at, updated_at
+		 FROM calendars WHERE owner_id = $1 AND external_id = $2 AND deleted_at IS NULL`, ownerID, externalID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -41,7 +57,7 @@ func (s *Store) ListCalendarsByUser(ctx context.Context, userID string) ([]*repo
 	var cals []*repo.Calendar
 	err := s.db.SelectContext(ctx, &cals,
 		`SELECT c.id, c.owner_id, c.name, c.description, c.color, c.timezone,
-		        c.default_visibility, c.default_busy_status, c.is_default,
+		        c.default_visibility, c.default_busy_status, c.is_default, c.external_id,
 		        c.deleted_at, c.created_at, c.updated_at
 		 FROM calendars c
 		 LEFT JOIN calendar_members cm ON cm.calendar_id = c.id AND cm.user_id = $1

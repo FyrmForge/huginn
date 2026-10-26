@@ -48,6 +48,7 @@ type Calendar struct {
 	DefaultVisibility string     `db:"default_visibility"`
 	DefaultBusyStatus string     `db:"default_busy_status"`
 	IsDefault         bool       `db:"is_default"`
+	ExternalID        string     `db:"external_id"` // device-side calendar identifier for push sync; "" for native
 	DeletedAt         *time.Time `db:"deleted_at"`
 	CreatedAt         time.Time  `db:"created_at"`
 	UpdatedAt         time.Time  `db:"updated_at"`

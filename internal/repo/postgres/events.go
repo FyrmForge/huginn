@@ -103,6 +103,20 @@ func (s *Store) DeleteEvent(ctx context.Context, id string) error {
 	return err
 }
 
+// DeleteEventsNotIn soft-deletes every live event in the calendar whose UID is
+// not in keepUIDs. Used by push sync to prune events removed on the device.
+func (s *Store) DeleteEventsNotIn(ctx context.Context, calendarID string, keepUIDs []string) (int, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE events SET deleted_at = NOW(), updated_at = NOW()
+		 WHERE calendar_id = $1 AND deleted_at IS NULL AND NOT (uid = ANY($2))`,
+		calendarID, pq.Array(keepUIDs))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 func (s *Store) GetEventByUID(ctx context.Context, calendarID, uid string) (*repo.Event, error) {
 	var e repo.Event
 	err := s.db.GetContext(ctx, &e,

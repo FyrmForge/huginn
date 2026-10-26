@@ -17,6 +17,7 @@ import (
 	"github.com/FyrmForge/huginn/internal/service"
 	"github.com/FyrmForge/huginn/internal/web/components"
 	"github.com/FyrmForge/huginn/internal/web/handler/admin"
+	apisync "github.com/FyrmForge/huginn/internal/web/handler/api/sync"
 	authlogin "github.com/FyrmForge/huginn/internal/web/handler/auth/login"
 	authoidc "github.com/FyrmForge/huginn/internal/web/handler/auth/oidc"
 	"github.com/FyrmForge/huginn/internal/web/handler/auth/register"
@@ -45,6 +46,7 @@ type Deps struct {
 	EventService        *service.EventService
 	SettingsService     *service.SettingsService
 	ImportExportService *service.ImportExportService
+	PushSyncService     *service.PushSyncService
 	CalDAVService       *service.CalDAVService
 	SyncService         *service.SyncService
 	RoutingService      *service.RoutingService
@@ -175,4 +177,7 @@ func RegisterRoutes(srv *server.Server, deps *Deps) {
 
 	// CalDAV protocol (Basic Auth, no session).
 	caldav.NewHandler(deps.CalDAVService, deps.CalendarService, deps.EventService).RegisterRoutes(e)
+
+	// Device push sync (Basic Auth with app password, no session).
+	apisync.NewHandler(deps.CalDAVService, deps.PushSyncService).RegisterRoutes(e)
 }

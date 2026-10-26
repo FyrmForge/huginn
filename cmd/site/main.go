@@ -159,6 +159,7 @@ func main() {
 	importExportService := service.NewImportExportService(store)
 	caldavService := service.NewCalDAVService(store)
 	routingService := service.NewRoutingService(store)
+	pushSyncService := service.NewPushSyncService(store, eventService)
 
 	// Sync service with optional provider connectors.
 	syncService := service.NewSyncService(store, calendarService, eventService, routingService)
@@ -218,6 +219,7 @@ func main() {
 		CalDAVService:       caldavService,
 		SyncService:         syncService,
 		RoutingService:      routingService,
+		PushSyncService:     pushSyncService,
 		FileStorage:         fileStorage,
 		Hub:                 hub,
 	})
