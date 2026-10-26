@@ -5,6 +5,7 @@ tmp/
 
 # Environment
 .env
+.pref.hamr.toml
 
 # IDE
 .idea/
@@ -29,5 +30,5 @@ coverage.out
 coverage.html
 
 # Node (if tailwind)
-node_modules/
+**/node_modules/
 .playwright-mcp/

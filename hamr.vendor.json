@@ -1,10 +1,10 @@
 {
   "deps": {
     "htmx": {
-      "version": "2.0.4",
-      "url": "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js",
+      "version": "2.0.11",
+      "url": "https://unpkg.com/htmx.org@2.0.11/dist/htmx.min.js",
       "out": "static/js/htmx.min.js",
-      "sha256": "e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447"
+      "sha256": "d6fdc75f204e6bdefa99b69bf1e6d4ac69b8a364f77929f45c13476b4000f717"
     },
     "idiomorph": {
       "version": "0.3.0",

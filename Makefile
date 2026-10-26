@@ -1,4 +1,4 @@
-.PHONY: build test lint templint db-sh docker-up docker-down docker-delete docker-reload docker-build clean install check-templ generate check-node-modules css css-build e2e e2e-local e2e-run e2e-run-local
+.PHONY: build test lint templint db-sh docker-up docker-down docker-delete docker-reload docker-build clean install check-templ generate check-node-modules css-build templ-check e2e e2e-local e2e-run e2e-run-local
 
 # Force bash so the ENV_LOAD eval below works cross-shell (sh on Debian/Ubuntu
 # is dash, which doesn't grok `eval "$(...)"` quoting consistently).
@@ -32,13 +32,13 @@ install:
 check-templ:
 	@command -v templ >/dev/null 2>&1 || { echo "templ not found. Run: make install" >&2; exit 1; }
 
+## templ-check: Fail if generated *_templ.go files are stale
+templ-check: check-templ
+	templ generate -check
+
 ## check-node-modules: Auto-install npm deps if missing
 check-node-modules:
 	@[ -d node_modules ] || npm install
-
-## css: Watch and rebuild Tailwind CSS on changes
-css: check-node-modules
-	npm run css
 
 ## css-build: Build Tailwind CSS for production (minified)
 css-build: check-node-modules
@@ -77,15 +77,15 @@ templint:
 
 ## docker-up: Start Docker services
 docker-up:
-	docker compose -f docker/docker-compose.yaml up -d
+	hamr compose up -d
 
 ## docker-down: Stop Docker services
 docker-down:
-	docker compose -f docker/docker-compose.yaml down
+	hamr compose down
 
 ## docker-delete: Delete Docker containers and volumes
 docker-delete:
-	docker compose -f docker/docker-compose.yaml down -v
+	hamr compose down -v
 
 ## docker-reload: Delete and recreate Docker services
 docker-reload: docker-delete docker-up

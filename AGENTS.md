@@ -367,8 +367,7 @@ Tailwind CSS — classes directly in templ components. Config in `tailwind.confi
 
 ```bash
 npm install
-npm run css        # Watch mode
-npm run css:build  # Production build
+make css-build     # Production build (npm run css:build); under `hamr dev` the [[dev.watch]] rule rebuilds on change
 ```
 
 ```

@@ -14,7 +14,9 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	SetupSharedEnvironment(*localMode)
-	defer TeardownSharedEnvironment()
 
-	os.Exit(m.Run())
+	// os.Exit skips defers, so tear down explicitly before exiting.
+	code := m.Run()
+	TeardownSharedEnvironment()
+	os.Exit(code)
 }

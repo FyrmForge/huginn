@@ -21,11 +21,26 @@
 - **Store interface**: Repository pattern used in scaffolded projects.
   Generated projects define a Store interface in their internal/repo/repo.go;
   it is not part of the hamr framework itself.
-- **hamr dev**: Dev server with file watching, auto-rebuild, and live reload.
-  Mirrors its recent output to a rolling log file (default
+  Grouped one sub-store per entity behind an accessor:
+  `store.Users().GetByID(ctx, id)` (not `store.GetUserByID`). A new entity is a
+  `FooStore` interface beside its model, a `Foo()` accessor on `Store`, and a
+  `fooStore` in each database package. Only `internal/service/` holds a Store —
+  handlers call services (exceptions: health probes and the auth
+  `SubjectLoader` in server.go route wiring). With `--db-connector gorm` the
+  models live in `internal/repo/` and their `gorm` tags are the schema;
+  `internal/db/models.go` only registers them for auto-migration. Never put a
+  `default:` tag on a field whose zero value matters (a `bool`, a counter):
+  GORM omits zero values from the INSERT when a default is declared.
+- **hamr dev**: Dev server with file watching, auto-rebuild, and live reload. On the local listener `/__hamr/*` answers only for Host `localhost`, `*.localhost` or an IP literal (403 otherwise; DNS-rebinding guard, `loopbackOnlyHamr` in `internal/devserver/proxy.go`); the tunnel listener is unaffected. Any file event on a watched path reruns its `[[dev.watch]]` rule, including timestamp-only ones (`touch .env` restarts the app) but not a bare `chmod`/`chown`.
+  `--headless` (automatic when stdout is not a terminal) skips the TUI and
+  streams every line — hamr, rules, daemons, docker logs — to stdout, for
+  agents/CI running `hamr dev --headless > dev.log &`; no hotkeys, stop
+  with SIGTERM. Mirrors its recent output to a rolling log file (default
   `.hamr/dev_logs.txt`, 200 lines) for LLM consumption. The file contains
   `[hamr dev]` messages plus watched command/daemon stdout-stderr with terminal
-  escapes stripped. The injected reload script also pipes browser
+  escapes stripped. The reload script is injected as
+  `<script src="/__hamr/client.js">` (a file, so an app CSP of
+  `script-src 'self'` allows it), and it also pipes browser
   `window.console.*` calls + uncaught JS errors + unhandled promise
   rejections + resource-load failures (`<img>`/`<script>`/`<link>` 404s)
   + CSP violations back to the dev server over a WebSocket at
@@ -46,10 +61,41 @@
   `[dev].hamr_console_filter = true` to drop frames whose message
   contains `[hamr]` (the reload script's own chatter — `[hamr] page
   swapped`, `[hamr] CSS reloaded`, etc.); default false shows
-  everything. Configure via `log_file` and `log_file_max_lines` in
+  everything. `[dev].dark_filter` (default false) seeds the dev panel's
+  "Dark filter" checkbox: an `invert(1) hue-rotate(180deg)` filter on
+  `<html>` (media, iframes and hamr's own overlay re-inverted) so a
+  light-mode app is bearable to work on. The SSE config payload carries
+  a `dark_filter` flag for the initial state; the checkbox POSTs
+  `/__hamr/dark`, which flips an in-process `atomic.Bool` and broadcasts
+  a `dark_filter` SSE event (`on`/`off`) to every open tab. The state
+  dies with the `hamr dev` process and is never written back to
+  `hamr.toml` — put it in `.pref.hamr.toml` for a per-developer
+  default. Configure via `log_file` and `log_file_max_lines` in
   `[dev]`; set `log_file = "none"` to disable. The TUI adds an `M` hotkey to
   toggle the MCP gateway (see **hamr mcp**); status bar shows `MCP on/<n>` or
-  `MCP off`.
+  `MCP off`. A `T` hotkey toggles a public tunnel from `[dev.tunnel]`
+  (`provider` = `cloudflared` default | `ngrok`, `args` appended to the built-in
+  command, or `cmd` with a `{port}` placeholder whose first printed https URL is
+  used; `env` default `["BASE_URL"]`). On: a loopback tunnel listener serves the
+  proxy handler with an allow-list (`tunnelAllowedPrefixes`: `/__hamr/reload`, `/__hamr/client.js`,
+  `/__hamr/logo.png`, `/__hamr/mail`, `/__hamr/sms`, `/__hamr/stripe`); every
+  other `/__hamr/*` route, including ones added later, returns 403 and
+  tunnel requests flagged in context so `/__hamr/reload` drops `output` events,
+  sends a names-only config, and the reload stream and error page hide build
+  error output; the `env` vars are set to
+  the public URL, and running `run` rules + daemons restart (no rebuild). Off,
+  or the tunnel process exiting, reverts. With built-in `cloudflared`, a
+  `Tunnel not found` output line (quick tunnel expired on Cloudflare's side, e.g. after
+  sleep) makes hamr stop the process, so the same revert runs, with a warning to press `T`. Off at every start. Progress goes out
+  on the event bus (`EvTunnelStart` "starting"/"stopping", `EvTunnelUp` with the
+  URL, `EvTunnelDown`): the ticker shows `tunnel starting`/`tunnel stopping`, and
+  while on the public URL replaces the localhost URL in the status bar (`o`
+  opens it). Injected env is composed from layers (`envLayers`: base
+  port-walk/hamr vars, then stripe, then tunnel; last wins), so a tunnel
+  toggle never wipes Stripe vars and vice versa. An `S` hotkey flips
+  `[dev.stripe]` between mock and listen (see **Stripe listen mode**); the
+  status bar shows `stripe: mock` / `stripe: listen` / `stripe: switching…`
+  off `EvStripeMode`, and the hint shows `S stripe` unless Stripe is off.
 - **hamr mcp**: MCP (Model Context Protocol) bridge that lets an AI agent
   (Claude Code, Codex, opencode) drive a running `hamr dev`. Two hops:
   agent ⟷ `hamr mcp` over stdio, then `hamr mcp` ⟷ `hamr dev` over localhost
@@ -61,38 +107,125 @@
   `/__hamr/mcp/*` namespace is separate from the browser `/__hamr/*` routes, so
   the kill-switch and permissions never affect the dev panel. Permissions are
   per-area in `[dev.mcp.access]` (`read`/`write`/omit=deny; `write` implies
-  `read`): `dev` (dev.info), `logs` (logs.read [ANSI-stripped, timestamped,
+  `read`): `dev` (dev.info read; dev.restart write), `logs` (logs.read [ANSI-stripped, timestamped,
   rule prefix-matched so rule="site" catches site:build/site:run], console.read
   [structured timestamped frames: time/level/msg/src], http.read [dev-proxy
   request log: method/path/status/durationMs incl /__hamr/*, static, SSE/WS —
   the proxy-level view the app's own access log can't give]), `docker`
   (logs/status read; restart/wipe write), `mail` (list/get read; clear/ingest
-  write), `build` (rule.run, rebuild.all, make.run — write-only), `stripe`
+  write), `sms` (list/get read; clear/ingest write), `build` (rule.run,
+  rebuild.all, make.run — write-only), `stripe`
   (list read; complete/expire/refund write). The gateway advertises only
   granted tools and re-checks permission per call (the security boundary; the
   bridge's filtering is UX). Async semantics: reads return immediately;
   docker.restart/wipe and rule.run/rebuild.all dispatch (poll docker.status /
-  logs.read) — or pass `wait:true` (+ `wait_timeout`, default 60s) to
+  logs.read); dev.restart replies before it restarts anything (the handler writes
+  and flushes `{"ok":true}`, then fires the restart) because it tears down the
+  very proxy the call arrived on — so the reply always lands, but reports only
+  acceptance, never the outcome; a restart is refused outright while the run has
+  been up <5s (`restartCooldown`), measured from the ready flip so it survives
+  the Runner being rebuilt, capping an agent that loops on dev.restart at one
+  teardown-and-rebuild per cooldown — the bridge re-reads
+  `.hamr/dev.json` per call so it finds the new port/token, but calls during the
+  few-second teardown fail with a connection error, so wait and poll dev.info — or pass `wait:true` (+ `wait_timeout`, default 60s) to
   docker.restart/wipe to block until running/healthy and get final statuses;
   make.run returns inline `output` for fast targets, else waits `make_wait`
   (default 20s) and returns `status:running` for slow ones, and is constrained
   by `make_targets` (empty=all allowed). Every call is audit-logged to `.hamr/mcp_logs.txt`
   (`log_file`; `"none"` disables); a dedicated `mcp` TUI tab (last in the `Tab`
   cycle) shows one line per request (reads included), and mutations are also
-  tagged `[mcp]` in the main log tab. Setup: `hamr mcp install --client claude|codex|opencode` (auto-detects
+  tagged `[mcp]` in the main log tab. Setup: `hamr setup` walks agents, per-area
+  permissions, and skill install in one interactive pass, writing `[dev.mcp]` +
+  `[dev.mcp.access]` and the per-agent configs (`--dry-run` previews).
+  `hamr mcp install --client claude|codex|opencode` (auto-detects
   installed agents when omitted; `--dry-run` previews) writes the per-client
   config, merging existing entries and idempotent — Claude `.mcp.json` and
   opencode `opencode.json` are project-scoped; Codex `~/.codex/config.toml` is
   global and gets `--project` pinned to this project. Requires `hamr` on PATH
   and `[proxy]` configured (the gateway lives on the proxy mux).
+- **hamr mock-serve**: Runs the dev mocks (mail, sms, stripe) standalone — no proxy,
+  TUI, build, or watch — built for a dedicated container in a dev environment.
+  Each release publishes the image `ghcr.io/fyrmforge/hamr:v<version>` (+ `:latest`,
+  linux/amd64 + arm64) with `mock-serve` as its default command — use `image:` in compose
+  rather than building hamr from source.
+  Unlike the mocks embedded in `hamr dev` (which mount on the proxy mux and read
+  `[dev.email]`/`[dev.sms]`/`[dev.stripe]` from hamr.toml), this command depends on no config
+  file: selection and all tuning come from env vars. `HAMR_MOCKS` (csv, required,
+  e.g. `mail,sms,stripe`) selects which to start; unknown names fail loudly.
+  Two listeners: `HAMR_MOCK_PORT` (default 4500) carries the app-facing surface
+  (stripe `/v1/*` + `/v2/*` API + mail `/__hamr/mail/ingest` + sms `/__hamr/sms/ingest`
+  sinks); optional
+  `HAMR_MOCK_UI_PORT` splits the human dashboards (stripe `/__hamr/stripe/*`,
+  mail inbox `/__hamr/mail`, SMS inbox `/__hamr/sms`) onto a second listener you can bind to loopback or
+  firewall separately (unset → UI shares the app-facing port). Invalid or out-of-range port values
+  error loudly rather than silently falling back to a default. Both listeners bind all interfaces by
+  default (correct in a container, where siblings reach it by service name); `HAMR_MOCK_BIND` restricts
+  the bind host — set `127.0.0.1` when running outside a container on a shared host, because the mock
+  surfaces are open by default (the UI serves every captured email, which may contain reset tokens /
+  magic links, over plain GET, and the Stripe surface fires a correctly-signed webhook at the app on
+  request). Two optional gates for ports that must be reachable beyond the compose network:
+  `HAMR_MOCK_UI_PASSWORD` puts a password gate (constant-time compare)
+  on every `/__hamr/*` dashboard route: browser password page at `/__hamr/gate` sets HttpOnly SameSite=Lax
+  cookie `__hamr_gate` (7 days, server-enforced via issue time in the token; changing the password invalidates
+  all cookies; Secure when `HAMR_BASE_URL` is https), scripts send `X-Hamr-Gate: <password>`; cookie and header
+  are stripped before reaching the app, the app's `Authorization` passes untouched; HTML GETs redirect to the
+  gate, others get 401 JSON. BREAKING: this was HTTP basic auth. The UI routes are mounted on their own mux under `/__hamr/`
+  so one handler covers them, and on a shared port the exact-pattern ingest sinks win over the prefix
+  and stay open to the app; `HAMR_MOCK_API_ALLOW` (csv of IPs and CIDRs, v4-mapped v6 peers unmapped
+  so v4 CIDRs match on a dual-stack listener) restricts the app-facing listener by TCP peer address,
+  ignoring `X-Forwarded-For` because it is client-set — behind a public proxy keep the port
+  unpublished and use private networking. Zoned (link-local) peers have the zone stripped before
+  matching. Allow the app's exact address (e.g. a compose `ipv4_address`), never a whole subnet or
+  `172.16.0.0/12`: those contain the Docker bridge gateway, and with Docker Desktop, rootless Docker
+  or the userland proxy, published-port traffic arrives from that gateway, so the list would admit
+  everyone. Each rejected request logs a warning with its `remote` address, which is how to find the
+  app's source address on other platforms (e.g. an IPv6 private network). The gate password is cleartext
+  over plain HTTP; put the UI behind TLS across untrusted networks. Stripe needs
+  `HAMR_STRIPE_BASE_URL` (browser-reachable origin of the mock UI — required
+  because `localhost:<port>` has no container-safe default: not reachable via the
+  host's published port or from sibling containers), plus `HAMR_STRIPE_WEBHOOK_URL`
+  and `HAMR_STRIPE_WEBHOOK_SECRET` (must match the app's `STRIPE_WEBHOOK_SECRET`);
+  optional `HAMR_STRIPE_THIN_WEBHOOK_URL` for v2 thin events.
+  Mail tuning: `HAMR_MAIL_MAX_MESSAGES` (500), `HAMR_MAIL_MAX_MESSAGE_BYTES`
+  (10MiB), `HAMR_MAIL_PERSIST_PATH` (empty → in-memory only); SMS tuning:
+  `HAMR_SMS_MAX_MESSAGES` (500), `HAMR_SMS_PERSIST_PATH` (empty → in-memory
+  only); stripe persist:
+  `HAMR_STRIPE_PERSIST_PATH`. Graceful shutdown on SIGINT/SIGTERM. Reuses the
+  same mock implementations as `hamr dev` via split route-registration methods.
+  **Front-door mode (staging):** `HAMR_MOCK_UPSTREAM=http://host:port` (http only) turns `hamr mock-serve`
+  into the public entry point. `HAMR_MOCK_UI_PORT` becomes the public port: `/__hamr/*` (dashboards, gate,
+  widget) is served by hamr and everything else is reverse-proxied to the app with the widget injected
+  (60s upstream response-header timeout). Requires `HAMR_MOCK_UI_PORT` and `HAMR_MOCK_UI_PASSWORD` — startup
+  error otherwise (fails closed). `HAMR_MOCK_PORT` stays the private API/ingest port (Stripe `/v1` `/v2`, mail/SMS
+  ingest), never gated. `/_devactions` always 404s on the public port; `/__hamr/app/actions` + `/__hamr/app/whoami` are served behind the gate when `HAMR_ACTIONS_TOKEN` is set. `HAMR_BASE_URL`
+  is the public origin: in front-door mode it is the default for `HAMR_STRIPE_BASE_URL` (which still overrides), and
+  `https://` makes the gate cookie Secure. `HAMR_GATE_BYPASS` is a csv of paths that skip the gate, matched on
+  whole path segments after path cleaning (`/payments` covers `/payments/x`, not `/payments-admin`). In plain
+  mode (no upstream) the gate covers `/__hamr/*` only. `HAMR_ACTIONS_TOKEN` (same value as the app's) enables the
+  app's dev actions in the widget. Client IP behind the front door: `X-Forwarded-For` keeps the edge's
+  value plus the edge address (first entry is client-set, forgeable); `X-Real-IP` passes through untouched — on
+  Railway read it (edge-overwritten).
+- **dev actions** (`pkg/devactions`, see `### devactions`): the app mounts the package's handler at `/_devactions`;
+  it only exists when `HAMR_ACTIONS_TOKEN` is set AND `HAMR_ACTIONS_ENV` is `development` or `staging`. `hamr dev`
+  generates a per-run random token and injects `HAMR_ACTIONS_TOKEN` + `HAMR_ACTIONS_ENV=development` into the app
+  (`buildHamrInjectedEnv` in `internal/devserver/devserver.go`); the dev tunnel blocks `/__hamr/app/`. The widget
+  proxies through `/__hamr/app/actions` (list, `POST .../<name>`), which forwards with `X-Hamr-Actions-Token`, and
+  `/__hamr/app/whoami`, which also forwards the browser's cookies (minus `__hamr_gate`) so the app resolves its
+  session: the panel shows "Logged in as" with mail/texts links to `/__hamr/mail?to=` / `/__hamr/sms?to=`
+  (exact-recipient filters; SMS compared on digits).
+  Widget: actions panel, test-accounts list, and login-form detection (a form with a password field not
+  `autocomplete="new-password"`, re-checked after htmx swaps) with a count badge; clicking an account fills email +
+  password and submits. Scaffolded `internal/devactions`: reseed (dangerous), create-account, logout-everyone;
+  accounts `admin@test.com` / `user@test.com` (`Test1234!`); seed `internal/devactions/seed.sql`, loaded by `make seed`.
 - **hamr ai capture**: Browser screenshot capture with HTML/text/metadata sidecars.
 - **hamr ai upgrade**: Git-based scaffold upgrade report. Clones the HAMR repo and diffs between version tags to produce a unified diff and stat summary of all changes between the project's baseline and current HAMR.
+- **.pref.hamr.toml**: Optional per-developer override file sitting next to `hamr.toml`, merged over it at load time. Gitignored by the scaffold so local preferences never reach the team's committed config. Covers the dev-server config (`[proxy]`, `[dev]`, `[dev.*]`) read by `hamr dev`/`compose`/`mcp`/`add service`, plus `[static].dir`. Does NOT cover `[lint.templ]` (loaded via `pkg/templint`) or `[hamr]`/`[options]`/`[ai]` (scaffold metadata, not preferences); `hamr setup` ignores it too, since it writes the values it shows back into hamr.toml (`devserver.LoadConfigNoPrefs`). Merge is per-key at any depth — write only the keys you want changed. Arrays of tables (`[[dev.watch]]`, `[[dev.daemon]]`, `[[dev.docker_compose]]`) replace the whole list rather than merging, so a `hamr add service` rule appended to hamr.toml is invisible while the override defines watch rules. An override must use the same spelling as the base file: `[proxy].listen` vs `[dev].proxy_listen` across the two files is a load error. Editing it hot-reloads `hamr dev`.
 - **.hamr/ai/**: Playground directory for all AI command artifacts (captures, upgrade reports). Gitignored. Configurable via `[ai] dir` in hamr.toml.
-- **hamr locale gen**: Code generator for type-safe i18n accessors.
+- **hamr gen locale**: Code generator for type-safe i18n accessors.
 - **hamr gen static**: Content-based static asset fingerprinting. Reads from
-  static/, writes fingerprinted copies to dist/, and generates a Go source file
+  frontend/static/, writes fingerprinted copies to frontend/dist/, and generates a Go source file
   with the manifest baked in at compile time. Config in [static] section of
-  hamr.toml. `--clean` removes dist/ and resets the manifest.
+  hamr.toml. `--clean` removes the dist dir and resets the manifest.
 - **hamr completion install**: Installs shell completion scripts for bash, zsh, or fish. Auto-detects shell from $SHELL. Supports --system for system-wide install (requires root) and --shell to override detection.
 - **respond.Redirect**: HTMX-aware redirect that sets HX-Redirect for HTMX
   requests and falls back to HTTP 303.
@@ -187,17 +320,18 @@ production middleware. Returns an error if any option value is invalid.
 ```go
 func WithHost(host string) Option                        // bind address
 func WithPort(port int) Option                           // listen port (1-65535)
-func WithDevMode(dev bool) Option                        // skip security headers in dev
+func WithDevMode(dev bool) Option                        // dev: skip security headers, disable all response caching (no-cache on everything)
 func WithMiddleware(mw ...echo.MiddlewareFunc) Option    // append global middleware
-func WithStaticDir(path string) Option                   // serve static/ at /static
-func WithStaticDistDir(path string) Option               // dist/ takes priority over static/
+func WithStaticDir(path string) Option                   // serve the static dir at /static
+func WithStaticDistDir(path string) Option               // dist dir takes priority over the static dir
 func WithEmbeddedStatic(fsys fs.FS, prefix string) Option // serve from embed.FS
 func WithErrorHandler(h echo.HTTPErrorHandler) Option    // custom error handler
 func WithTimeout(d time.Duration) Option                 // request context timeout
 func WithMaxBodySize(size string) Option                 // e.g. "2M", "500K"
 func WithShutdownTimeout(d time.Duration) Option         // graceful shutdown (default 10s)
 func WithGeneratedDir(dir string) Option                 // pre-rendered static pages dir
-func WithTrustedProxies(cidrs ...string) Option          // proxy CIDRs trusted for X-Forwarded-For; unset = ignore XFF (RealIP unspoofable)
+func WithTrustedProxies(cidrs ...string) Option          // proxy CIDRs trusted for X-Forwarded-For and X-Forwarded-Proto (also drives c.Scheme()); unset = ignore XFF (RealIP unspoofable) and Scheme() trusts X-Forwarded-Proto only from loopback/private peers (echo default); "cloudflare" = Cloudflare ranges, refreshed 24h
+var CloudflareCIDRs []string                             // Cloudflare edge ranges pinned at release (static)
 ```
 
 Behind a proxy you MUST pass its range (`WithTrustedProxies` / `TRUSTED_PROXIES`
@@ -208,6 +342,17 @@ Render) → the platform's internal proxy range, which you often can't pin and m
 change, so verify it. Requirements: the proxy must actually emit
 `X-Forwarded-For`; never trust `0.0.0.0/0` (re-enables IP spoofing). Verify by
 dumping `c.Request().RemoteAddr` (the peer → CIDR to trust) vs `c.RealIP()`.
+
+Cloudflare proxy → `cloudflare` entry: trusts `CloudflareCIDRs` at startup;
+`Start()` refetches `api.cloudflare.com/client/v4/ips` immediately and every 24h
+(needs outbound HTTPS). A failed/implausible fetch (non-200, bad JSON, empty
+v4/v6, invalid CIDR, wider than /8 v4 or /16 v6) logs a warning and keeps the
+current list. No egress → pass `CloudflareCIDRs...` (static). Stacked proxies
+(Cloudflare → nginx → app): `cloudflare,<nginx CIDR>`, and nginx must append
+XFF (`$proxy_add_x_forwarded_for`), not overwrite it. Cloudflare Tunnel
+(`cloudflared`)/ngrok on-host → `127.0.0.1/32`; unset, every client is
+`127.0.0.1` and shares one rate-limit bucket. Never trust `CF-Connecting-IP`
+alone (forgeable by direct origin hits).
 
 #### Methods
 
@@ -283,6 +428,13 @@ func MustGet[T any](c echo.Context, key Key[T]) T
 func GetAs[T any](c echo.Context, key Key[any]) (T, bool)
 func MustGetAs[T any](c echo.Context, key Key[any]) T
 ```
+
+`Get`/`GetAs` tolerate a nil `echo.Context`, returning `(zero, false)`:
+components render outside a request in normal use — `middleware.ErrorPages`
+renders from a `func(code int, message string)`, so the scaffold's error page
+calls `@Layout(nil, ...)` and every accessor built on `Get` (`GetFlash`,
+`GetSubject`, `GetSubjectID`) hits it. `MustGet`/`MustGetAs` still panic, with
+`ctx: nil echo.Context for key <name>`.
 
 #### Pre-defined Keys
 
@@ -1284,6 +1436,29 @@ func AllRuleIDs() []string                     // sorted IDs of every known rule
 func DefaultSeverity(id string) Severity       // recommended default; Warning for unknown IDs
 ```
 
+#### Inline suppression
+
+`LintFile` post-filters diagnostics against `templint:ignore` directives found
+in `//` comments. Rules never see them.
+
+```
+// templint:ignore <rule-id>[,<rule-id>...] [-- optional reason]
+// templint:ignore                          (suppresses every rule)
+```
+
+- Own-line directive targets the line below; a directive trailing source
+  content targets the line it sits on. Only the adjacent line — no cascading
+  lookback.
+- Rules anchor diagnostics to the line a tag *opens* on, so for a multi-line
+  tag the directive goes above the `<form`, not above the offending attribute.
+- Everything after ` -- ` is a human reason, ignored by the parser.
+- `unknown-rule` (Error) is emitted for a rule ID that is not in the registry,
+  so a typo cannot silently suppress nothing.
+- `unused-suppression` (Warning) is emitted for a directive that suppressed no
+  diagnostic, so stale directives get cleaned up.
+- Both are meta diagnostics: not in `AllRuleIDs()`, not configurable via
+  `[lint.templ]`. A directive naming a known-but-disabled rule reports neither.
+
 ```toml
 # Example [lint.templ] block. Rules omitted from this section are disabled;
 # "off" is equivalent to omitting the rule.
@@ -1342,6 +1517,10 @@ type Config struct {
     ArtifactDir         string        // default: "testdata/e2e-artifacts", env: E2E_ARTIFACT_DIR
     ScreenshotOnFailure bool          // default: true,  env: E2E_SCREENSHOT_ON_FAIL
     HTMLDumpOnFailure   bool          // default: true,  env: E2E_HTML_DUMP_ON_FAIL
+    GPU                 bool          // default: false, env: E2E_GPU (false passes --disable-gpu)
+    BrowserPath         string        // default: "",    env: E2E_BROWSER_PATH (empty = rod's managed Chromium)
+    WindowWidth         int           // default: 0,     env: E2E_WINDOW_SIZE as "WxH" (0 = Chrome default)
+    WindowHeight        int
 }
 
 type Option func(*Config)
@@ -1353,6 +1532,9 @@ func WithArtifactDir(path string) Option
 func WithScreenshotOnFailure(b bool) Option
 func WithHTMLDumpOnFailure(b bool) Option
 func WithNoSandbox(b bool) Option
+func WithGPU(b bool) Option
+func WithBrowserPath(path string) Option
+func WithWindowSize(w, h int) Option
 ```
 
 #### Browser Lifecycle
@@ -1673,8 +1855,11 @@ type FileStorage interface {
 
 type SignableStorage interface {
     FileStorage
-    SignURL(ctx context.Context, path string, expiry time.Duration) (string, error)
+    SignURL(ctx context.Context, path string, expiry time.Duration, opts ...SignOption) (string, error)
 }
+
+type SignOption func(*signConfig)
+func WithAttachment(filename string) SignOption  // sign with Content-Disposition: attachment; filename=... to force download (RFC 6266; non-ASCII names get authoritative UTF-8 filename* plus ASCII fallback; empty name emits bare "attachment")
 ```
 Save overwrites existing files. Delete is idempotent. List returns all file
 paths under the given prefix.
@@ -1863,7 +2048,7 @@ func (s *ImageStore) UploadFromReaderWithID(ctx context.Context, id string, r io
 func (s *ImageStore) Delete(ctx context.Context, id string) error
 func (s *ImageStore) GetMedia(id string) ImageRef
 func (s *ImageStore) GetMediaCtx(ctx context.Context, id string) ImageRef  // may use signed URLs
-func (s *ImageStore) SignedURL(ctx context.Context, path string, expiry time.Duration) (string, error)
+func (s *ImageStore) SignedURL(ctx context.Context, path string, expiry time.Duration, opts ...storage.SignOption) (string, error)
 func (s *ImageStore) ServeHandler() echo.HandlerFunc
 ```
 
@@ -1906,7 +2091,7 @@ func (s *VideoStore) UploadFromReaderWithID(ctx context.Context, id string, r io
 func (s *VideoStore) Delete(ctx context.Context, id string) error
 func (s *VideoStore) GetMedia(id string) VideoRef
 func (s *VideoStore) GetMediaCtx(ctx context.Context, id string) VideoRef
-func (s *VideoStore) SignedURL(ctx context.Context, path string, expiry time.Duration) (string, error)
+func (s *VideoStore) SignedURL(ctx context.Context, path string, expiry time.Duration, opts ...storage.SignOption) (string, error)
 func (s *VideoStore) ServeHandler() echo.HandlerFunc
 ```
 
@@ -2124,7 +2309,7 @@ type BucketEnsurer interface {
 > been **removed**; the mock lives entirely server-side in
 > `internal/devserver/stripemock*.go`.
 
-**Architecture.** Both the Stripe API surface (`/v1/*`) and the dev UI
+**Architecture.** Both the Stripe API surface (`/v1/*`, `/v2/*`) and the dev UI
 (`/__hamr/stripe/*`) mount on hamr's single proxy mux (default port
 `:3000`). `stripe-go` requires `req.URL.Path` to start with `/v1` — that's
 satisfied as long as paths begin with `/v1`, regardless of the listener.
@@ -2133,8 +2318,9 @@ single-mux model removes that port and the `[dev.stripe].api_listen`
 config knob. `http.ServeMux`'s longest-prefix matching keeps `/v1/*` and
 `/__hamr/*` from colliding with the catch-all `/` reverse-proxy to the
 app. **Caveat:** apps that version their own REST API at `/v1/*` (e.g.
-their own `/v1/accounts`, `/v1/refunds`, `/v1/payouts`) and turn on
-`[dev.stripe].enabled` will have those exact paths intercepted by the
+their own `/v1/accounts`, `/v1/refunds`, `/v1/payouts`, `/v1/transfers`,
+`/v1/balance_settings`, or `/v2/core/accounts`) and turn on
+`[dev.stripe]` will have those exact paths intercepted by the
 mock — the mock can't tell which `/v1/*` paths are Stripe's vs theirs.
 Workaround: serve the app's API under a different prefix (most projects
 already use `/api/v1/*`).
@@ -2154,9 +2340,91 @@ from config alone, not from the runtime listener.
   (`line_items[0][price_data][currency]=gbp` etc.) into a stored session.
   Returns a `checkout.session`-shaped JSON response with `URL` pointing at
   `/__hamr/stripe/checkout?session=<id>` on the proxy.
+  `payment_intent_data.metadata` is stored and copied onto the PaymentIntent
+  and Charge the paid outcome creates (session `metadata` is the fallback);
+  `customer_email` is echoed and becomes the PI/Charge `receipt_email`.
 - `GET /v1/checkout/sessions/{id}` — retrieve. Same JSON shape.
+- `POST /v1/checkout/sessions/{id}/expire` — the SDK's `Expire`. Open →
+  expired, fires `checkout.session.expired`, returns the session. 400 when
+  the session is not open, 404 when unknown.
+- `mode` is `payment` (default) or `subscription`. Subscription mode needs
+  `price_data.recurring{interval, interval_count}` on every line item and
+  one interval per session; payment mode refuses recurring prices.
+  `subscription_data.metadata` is copied onto the subscription.
+- Discounts: `discounts[0].coupon` or `discounts[0].promotion_code` (one,
+  resolved at create — unknown / expired / exhausted is a 400), or
+  `allow_promotion_codes=true` (the hosted page shows a code input on the
+  Pay form; a rejected code re-renders with Stripe's inline message and
+  leaves the session open); never both. The stored session keeps
+  `AmountTotal` (gross; JSON name kept for old state files) and a
+  snapshotted `AmountDiscount`; `Total()` is what the buyer pays. Response:
+  `amount_subtotal`, `amount_total`, `total_details.amount_discount`,
+  `discounts[]`, `allow_promotion_codes`. `times_redeemed` on the coupon and
+  code bump on completion (`redeemDiscount`), not on create; it re-runs
+  the coupon and code validation first, so a limit reached or a code
+  deactivated while the session sat open fails the payment with the same
+  inline message (`errPromotionCode`). `findPromotionCode` prefers an
+  active code over an inactive one with the same text, so reused text
+  resolves deterministically. A zero total completes as
+  `payment_status=no_payment_required` with `payment_intent` null and no
+  PI/Charge. `payment_intent` is null on every session until it is paid
+  (`PaymentIntentID` is set in `completeCheckout`, not at create) and
+  stays null for a subscription session, whose PI is linked from the
+  invoice only — as Stripe has done since API 2022-08-01.
+- After a subscription-mode session completes the response also carries
+  `customer` (the `customer=` given at create, else a Customer minted at
+  payment with the session's `customer_email`) and `subscription`.
+  `customer_details` is null while open with no customer attached, else
+  `{email, name}` from the Customer or `customer_email`.
+- `line_items[].price=<id>` references a stored Price (resolved at create:
+  unknown → 400 `resource_missing`, inactive → 400; `price` and
+  `price_data` are mutually exclusive, as are `customer` and
+  `customer_email`). The subscription item then carries the real price and
+  product ids and `items[].price` is the stored Price object.
 
-**API surface (Connect accounts).**
+**API surface (Connect accounts v2).** The default for new projects: Stripe
+refuses v1 Express account creation for new platforms. Implemented in
+`stripemock_v2account.go`; stored as `stripeV2Account` in its own map
+(`v2_accounts` in the state file).
+- `POST /v2/core/accounts` — JSON body (stripe-go sends v2 POSTs as JSON,
+  not bracket form). Reads `contact_email`, `display_name`, `dashboard`,
+  `identity.country`, `defaults.currency`,
+  `defaults.responsibilities.{fees,losses}_collector`, `metadata`, and
+  `configuration.{customer,merchant,recipient}`. Every
+  `{"requested": true}` leaf under a configuration's `capabilities` becomes
+  a capability at `<config>.<dotted path>` with status `pending`.
+  Requesting `recipient.stripe_balance.stripe_transfers` also adds
+  `recipient.stripe_balance.payouts` pending (Stripe grants it, it is not
+  requestable). Response: `object: "v2.core.account"`, RFC 3339 `created`,
+  `applied_configurations`, nested `configuration.<cfg>.capabilities...{status,
+  status_details}`, and `requirements.entries` (two `currently_due` entries
+  restricting the pending capabilities) while anything is pending.
+- `GET /v2/core/accounts/{id}` — retrieve. `include[]` is accepted and
+  ignored; configuration and requirements are always returned.
+- `POST /v2/core/account_links` — `account` + `use_case.type`
+  (`account_onboarding` | `account_update`). Stores
+  `use_case.<type>.return_url` on the account. URL →
+  `/__hamr/stripe/onboarding?account=<id>`; `expires_at` +5 min, RFC 3339.
+- Errors use the v2 shape (`{"error":{"type","code","message"}}`), which
+  stripe-go decodes into `*stripe.V2RawError`.
+- Onboarding: the same `/__hamr/stripe/onboarding` page renders a v2 view
+  (configurations, each capability and status). `POST
+  /__hamr/stripe/account/complete` sets every capability `active`, fires
+  thin events `v2.core.account[requirements].updated` and
+  `v2.core.account[configuration.<cfg>].capability_status_updated` (one per
+  configuration with capabilities), then 303s to the stored `return_url`
+  (http/https only) or renders a done page. 409 when already onboarded.
+
+**Thin events.** `fireEvent` with `thinRelatedID` builds
+`{"id","object":"v2.core.event","type","livemode":false,"created":<RFC 3339>,
+"related_object":{"id","type":"v2.core.account","url":"/v2/core/accounts/<id>"}}`
+— stripe-go's `ParseEventNotification` rejects `object: "event"`. Signed
+with the same HMAC scheme and secret as snapshot events and POSTed to
+`WebhookEndpoint.ThinURL` (`[dev.stripe].thin_webhook_url`). Empty ThinURL →
+logged, not delivered. This matches `stripe listen --forward-thin-to`,
+which also uses one secret for both forwards.
+
+**API surface (Connect accounts v1).**
 - `POST /v1/accounts` — create connected account. Defaults: type=express,
   country=US, default_currency derived from country (GB→gbp, EU/DE/FR/IT/ES/NL→eur,
   JP→jpy, otherwise usd). New accounts start in pre-onboarding state:
@@ -2248,33 +2516,110 @@ where no Charge object exists for a payment that never settled.
   `charge.refunded` webhook fires async. Caller passes **exactly one** of
   `payment_intent` or `charge` (rejected if both or neither).
   - `amount` (optional) — defaults to the charge's remaining unrefunded
-    balance (full refund). Validated: positive, ≤ remaining.
+    balance, `amount_captured − amount_refunded` (full refund). Validated:
+    positive, ≤ remaining.
   - `reverse_transfer` (optional bool) — for destination charges,
     reverses the auto-created Transfer to the connected account.
     Increments `Transfer.amount_reversed`, capped at the transfer's
     remaining unreversed balance. Synthesises a `trr_test_<hex>` ID and
     populates `Refund.source_transfer_reversal`.
-  - `refund_application_fee` (optional bool) — flag tracked on the Refund
-    object. ApplicationFee is not modelled as a separate resource yet, so
-    no additional state changes today.
+  - `refund_application_fee` (optional bool) — on a direct charge the
+    ledgers move `application_fee × amount / amount_captured` back from
+    the platform to the connected account; no separate ApplicationFee
+    resource.
   - `reason` (optional) — free-text reason ("duplicate", "fraudulent",
     etc.).
 - `GET /v1/refunds/{id}` — retrieve.
+- `GET /v1/refunds` — list filtered by `charge` and/or `payment_intent`,
+  newest first (ties broken by id), `limit` (default 10, max 100) +
+  `starting_after` so `List(...).All(ctx)` walks every page.
+- A refund on a fully refunded charge fails 400 with code
+  `charge_already_refunded` (`errChargeAlreadyRefunded` sentinel); on a
+  disputed charge with `charge_disputed` (`errChargeDisputed`).
 
 **Cascade on refund success.**
 1. `Charge.amount_refunded += refund.amount` (held under the same lock as
    the validation so concurrent refunds can't double-spend).
 2. `Charge.refunded = true` if amount_refunded reaches charge.amount.
-3. If `reverse_transfer && charge.transfer != ""`: increment
-   `Transfer.amount_reversed` by min(refund.amount, remaining).
+3. If `reverse_transfer && charge.transfer != ""`: record a reversal of
+   min(refund.amount, remaining) on the transfer (`reverseTransferLocked`,
+   appends to `Transfer.Reversals` with `refund_id`) and set
+   `Refund.source_transfer_reversal` to its `trr_test_` id.
 4. Refund stored. Async webhook fanout: `charge.refunded` with the
-   *updated* Charge as the event payload.
+   *updated* Charge, then `transfer.reversed` with the updated transfer
+   when step 3 reversed anything.
 
 **What's not modelled.** Async-pending refunds (ACH, etc. — real Stripe
 returns status=`pending` and resolves later via `refund.updated`).
 Refund failures (no failure simulation on the create endpoint yet).
-ApplicationFeeRefund as a distinct resource. TransferReversal as a
-distinct retrievable resource (only the ID is surfaced on the Refund).
+ApplicationFeeRefund as a distinct resource.
+
+**API surface (Transfers).** `stripemock_transfer.go`.
+- `POST /v1/transfers` — `amount`, `currency`, `destination` required;
+  optional `source_transaction`, `transfer_group`, `description`,
+  `metadata`. Destination must be a v1 or v2 account; a v2 account needs
+  `recipient.stripe_balance.stripe_transfers` = `active`, else 400 code
+  `insufficient_capabilities_for_transfer` (v1 accounts are not
+  capability-checked). `source_transaction` must be an existing charge in
+  the same currency with `amount <= amount_captured - amount_refunded -
+  net transfers already drawn from it`; without `source_transaction` the
+  platform balance (derived ledger) must cover `amount`. Either shortfall
+  is 400, code `balance_insufficient`. Fires `transfer.created`.
+- `GET /v1/transfers/{id}` — retrieve; `reversals` is an inline list object.
+- `POST /v1/transfers/{id}/reversals` — `amount` (0/absent = everything
+  left), `metadata`. 400 when nothing is left or amount exceeds it. Returns
+  a `transfer_reversal`; fires `transfer.reversed` with the updated transfer.
+
+**API surface (Balance).** `stripemock_balance.go`.
+- Every serialized charge carries `balance_transaction: "txn_<charge id>"`,
+  `disputed`, and `payment_method_details.card` (visa, 4242, credit, US).
+- `GET /v1/balance_transactions/{id}` — ids are derived, not stored:
+  `txn_<charge id>` → type `charge`, fee `stripeFee(amount_captured)`
+  (1.5% + 20 for gbp/eur, 2.9% + 30 otherwise); `txn_<dispute id>_withdrawal`
+  → `adjustment`/`dispute`, amount −disputed, fee 2000;
+  `txn_<dispute id>_reinstatement` (won disputes only) → amount +disputed,
+  fee 0 (the dispute fee is never returned). `net = amount − fee`,
+  `fee_details[0].type = stripe_fee` (empty when fee is 0).
+- `GET`/`POST /v1/balance_settings` — scoped by `Stripe-Account` ("" =
+  platform; unknown account → 404). Stores `payments.debit_negative_balances`,
+  `payments.settlement_timing.delay_days`, and
+  `payments.payouts.schedule.{interval (manual|daily|weekly|monthly),
+  monthly_payout_days (1–31), weekly_payout_days}`. Defaults: daily, 2 days.
+- Derived balances (control page, payout control): connected =
+  transfers − reversals + direct charges − their refunds − non-failed
+  payouts; platform = captured charges − fees − refunds − net transfers −
+  platform payouts + application fees. Disputes (and the won reversal)
+  land on whoever holds the charge, and `refund_application_fee` moves the
+  pro-rata fee back. No pending/available split.
+
+**Disputes.** `stripemock_dispute.go`, dashboard-driven.
+- `POST /__hamr/stripe/dispute` (`payment_intent=`) — PI must be succeeded
+  with a charge not already disputed (409) and not fully refunded (400).
+  Creates `dp_test_` status `needs_response`, amount = `amount_captured −
+  amount_refunded`, reason `fraudulent`,
+  evidence due +7 days; sets the charge's dispute. Fires
+  `charge.dispute.created` + `charge.dispute.funds_withdrawn`.
+- `POST /__hamr/stripe/dispute/close` (`dispute=`, `outcome=won|lost`) —
+  409 when not `needs_response`. Fires `charge.dispute.closed` (+
+  `charge.dispute.funds_reinstated` when won).
+- Dispute objects inline `balance_transactions` (withdrawal; + reinstatement
+  when won) so apps can read the dispute fee.
+- `POST /__hamr/stripe/payout/account` (`account=`) — creates a pending
+  `automatic=true` payout of the account's whole balance in its first
+  positive currency (400 when nothing to pay out), then 303s to the payout
+  page. Stands in for Stripe's scheduled connected-account payouts.
+
+**Idempotency.** `RegisterAPIRoutes` wraps every API route
+(`idempotentRouter`). A POST with an `Idempotency-Key` records status,
+headers and body; a repeat with the same key, path and `Stripe-Account`
+replays it with `Idempotent-Replayed: true`, and a concurrent repeat waits
+for the first to finish. In memory, cache cleared at 1000 keys.
+
+**Event log.** Every event (snapshot or thin) goes through `fireEvent`,
+which records a `stripeEvent` (id, type, thin, account, object id, payload,
+attempts, delivered, last error) before delivery. Last 200, in memory only.
+`resendEvent(id)` redelivers the stored payload with a fresh signature, so
+the app sees the same event id again.
 
 **API surface (Payouts — Connect-aware).**
 - `POST /v1/payouts` — create a manually-triggered payout. Reads the
@@ -2294,6 +2639,213 @@ distinct retrievable resource (only the ID is surfaced on the Refund).
   This is the canonical marketplace dashboard query: "show all payouts to
   this seller's connected account".
 
+**API surface (Coupons and promotion codes).** `stripemock_coupon.go`,
+maps `coupons` and `promotion_codes` in the state file.
+- `POST /v1/coupons` — `id` (optional, else 8 uppercase hex), `name`,
+  exactly one of `percent_off` (0 < x ≤ 100) / `amount_off` + `currency`,
+  `duration` `once` (default) | `repeating` + `duration_in_months` |
+  `forever`, `max_redemptions`, `redeem_by`, metadata. Duplicate id → 400
+  `resource_already_exists`. `GET /v1/coupons` (newest first, `limit` +
+  `starting_after`), `GET /v1/coupons/{id}`, `DELETE /v1/coupons/{id}`
+  (sessions and subscriptions keep their snapshotted discount).
+  `valid` = not past `redeem_by` and not at `max_redemptions`.
+- `POST /v1/promotion_codes` — `promotion[type]=coupon` +
+  `promotion[coupon]` (this API version has no top-level `coupon`),
+  `code` (generated when omitted; an active duplicate, any case, is a 400),
+  `active` (default true), `max_redemptions`, `expires_at`, metadata.
+  Response inlines the coupon under `promotion.coupon`.
+  `GET /v1/promotion_codes` filters `code` (case-insensitive), `coupon`,
+  `active`; paged. `GET` / `POST /v1/promotion_codes/{id}` (update
+  `active`, metadata).
+- `applyDiscount(sess, couponID, promoID, code)` (caller holds the write
+  lock) resolves whichever is set, runs the redemption checks (code
+  `active` / `expires_at` / `max_redemptions`, then coupon `redeem_by` /
+  `max_redemptions`), computes the amount (`percent_off` rounds to nearest
+  minor unit; `amount_off` capped at the subtotal and must match the
+  session currency) and stores `Discounts[0]` + `AmountDiscount`. Errors
+  carry Stripe's wording via `stripeText` so the hosted page can show them
+  inline (`*errPromotionCode`).
+- Not modelled: minimum amount, first-purchase-only, customer/product
+  restrictions, currency options.
+
+**API surface (Subscriptions and invoices).** `stripemock_subscription.go`,
+maps `subscriptions` and `invoices`.
+- Created only by `completeCheckout` on a `mode=subscription` session
+  (`createSubscriptionLocked`): `sub_test_…` active, one
+  `stripeSubscriptionItem` per line item (the referenced Price / Product
+  ids for a `price=<id>` line item, synthesised `price_test_` /
+  `prod_test_` ids for inline `price_data`), `BillingCycleAnchor` = completion time, period 0 =
+  [anchor, `periodEnd(0)`), `Cycles` counts completed periods so period
+  bounds derive from the anchor (`addMonthsClamped`: a Jan 31 anchor bills
+  Feb 28 then Mar 31; day/week are plain durations). The session's coupon is
+  snapshotted as `stripeSubscriptionDiscount` (`once` → removed after the
+  first invoice; `repeating` → `End` = start + N months; `forever` → no
+  end). First invoice: `in_test_…`, `MOCK-0001`-style number,
+  `subscription_create`, paid, `PaymentIntentID` = the PI
+  `completeCheckout` creates for it (empty for a zero total; passed in as
+  `piID`, the session's own `payment_intent` stays null). Creation fires,
+  between `checkout.session.completed` and the payment events,
+  `customer.subscription.created`, `invoice.paid` and
+  `invoice.payment_succeeded`; the session response then also carries
+  `customer` and `subscription`. `POST /v1/subscriptions` → 400 pointing at
+  Checkout.
+- `GET /v1/subscriptions/{id}` — `items.data[]` carry `price` (`recurring`,
+  `unit_amount`, `unit_amount_decimal` as a string, `product` id) and
+  `current_period_start/end` (on the item on this API version),
+  `latest_invoice` id, `discounts[]` (Discount object, coupon inlined under
+  `source.coupon`, `end` for repeating), `cancel_at`, `cancel_at_period_end`,
+  `canceled_at`, `ended_at`, `default_payment_method` `pm_card_visa`.
+- `POST /v1/subscriptions/{id}` — `cancel_at_period_end`, `cancel_at`
+  (`cancel_at=` clears), `metadata`, `description`; fires
+  `customer.subscription.updated`; 400 on a canceled subscription.
+  `DELETE /v1/subscriptions/{id}` — `cancelSubscriptionLocked` now:
+  `canceled`, `canceled_at` = `ended_at` = now, any `open` invoice of the
+  subscription → `void` (`status_transitions.voided_at`, `payments[].status`
+  `canceled`), fires `customer.subscription.deleted` then `invoice.voided`;
+  400 `resource_missing` when already
+  canceled (Stripe's answer). `GET /v1/subscriptions` — `customer`,
+  `status` (default hides `canceled`; `all` shows everything; else exact),
+  `price`; paged.
+- `GET /v1/invoices/{id}`, `GET /v1/invoices` (`subscription`, `customer`,
+  `status`; paged). Invoice shape on this API version:
+  `parent.subscription_details.subscription`, `payments.data[]` (one
+  `invoice_payment` with `payment.payment_intent`, status paid | open),
+  `lines.data[]` (`pricing.price_details.{price,product}`,
+  `parent.subscription_item_details`, `period`), `total_discount_amounts`,
+  `discounts[]` (discount ids), `status_transitions.{finalized_at,paid_at}`,
+  `amount_due` / `amount_paid` / `amount_remaining`, `attempt_count`,
+  `next_payment_attempt` always null (no automatic retry; only the
+  `retry` action pays an open invoice).
+- Lifecycle (caller holds the write lock; each returns the events to fire):
+  `cycleSubscriptionLocked(sub, at)` — cancel when `cancel_at_period_end`,
+  `cancel_at` reached, or still `past_due` (dunning gave up; the open
+  invoice is voided, `invoice.voided`); else drop an
+  expired repeating discount, `Cycles++`, new period, `newInvoiceLocked`
+  (`subscription_cycle`), then either `FailNextRenewal` with a non-zero
+  total (a zero invoice cannot fail; the flag is cleared either way) —
+  invoice `open`, `attempt_count` 1, PI
+  `requires_payment_method` + `Failed`, subscription `past_due`; events
+  `invoice.payment_failed`, `customer.subscription.updated`,
+  `payment_intent.payment_failed`) or `payInvoiceLocked` (new PI + Charge
+  `succeeded`; events `invoice.paid`, `invoice.payment_succeeded`,
+  `customer.subscription.updated`, `payment_intent.succeeded`,
+  `charge.succeeded`). `retrySubscriptionLocked` pays a `past_due`
+  subscription's open invoice (409 otherwise) → active with the paid
+  events. Renewal PIs and Charges carry `customer` and `description`
+  `Invoice <number>` and feed the ledgers like any charge.
+- `subscriptionAction(id, action)` is the shared entry for the dashboard
+  row and `stripe.subscription`: `next` (advance the clock to
+  `nextPeriodTarget(id)`: `sub.dueAt()`, or now when real time already
+  passed it; 409 for a canceled subscription), `retry`, `fail_next`
+  (toggle; active or trialing), `cancel`. `POST /v1/subscriptions/{id}`
+  validates `cancel_at` before it touches anything, so a 400 leaves the
+  subscription untouched.
+- Trials: session `subscription_data[trial_end]` (mode=subscription only, ≥ mock now + 48h at create and again at pay, else 400) → `trialing`, `trial_start/end`, period end = anchor = trial end, £0 paid first invoice, `no_payment_required`, no PI/Charge; checkout page shows £0 due today then the price from trial end; `once` coupon survives to the first real invoice; at `trial_end` → `active` + `subscription_cycle` invoice (Cycles not incremented); cancel in trial never charges.
+- Not modelled: `trial_period_days`, `trial_settings`, proration, quantity / plan changes, pausing,
+  invoice items, `/v1/test_helpers/test_clocks`.
+
+**API surface (Customers).** `stripemock_customer.go`, map `customers`.
+- `POST /v1/customers` — `email`, `name`, `description`, metadata →
+  `cus_test_…`. `GET /v1/customers` — `email` filter (exact,
+  case-insensitive), newest first, paged. `GET` / `POST
+  /v1/customers/{id}` — retrieve / update the same fields; unknown id →
+  404 `resource_missing`.
+- `completeCheckout` on a `mode=subscription` session without `customer=`
+  mints one carrying the session's `customer_email` and stores it, so the
+  id on `checkout.session.completed` resolves. Invoices serialize
+  `customer_email` / `customer_name` from the stored Customer
+  (`customerEmailLocked`); a checkout session with `customer=` copies
+  email and name onto the session for `customer_details`.
+- Not modelled: delete, payment methods, tax ids, test clocks per
+  customer. Subscriptions paid before Customers existed keep a customer
+  id with no record behind it; `rm .hamr/stripe/state.json` to reset.
+
+**API surface (Products and Prices).** `stripemock_price.go`, maps
+`products` and `prices`; a price stores `product_id`, `interval` (empty =
+one-time), `interval_count`, `lookup_key`, `active`.
+- `POST /v1/products` — `name` (required), `description`, metadata,
+  `active` (default true). `GET /v1/products/{id}`; `GET /v1/products`
+  (`active`; paged). No update endpoint.
+- `POST /v1/prices` — `currency` and `unit_amount` required (non-negative
+  integer); `recurring[interval]` day|week|month|year +
+  `recurring[interval_count]` (default 1) make it recurring; exactly one
+  of `product=<id>` (unknown → 400 `resource_missing`) or
+  `product_data[name]` (creates the product inline); `nickname`,
+  `lookup_key` (`claimLookupKeyLocked`: a key held by another price is a
+  400 unless `transfer_lookup_key=true` moves it), metadata, `active`.
+- `GET /v1/prices/{id}`; `POST /v1/prices/{id}` — update `active`,
+  metadata, `nickname`, `lookup_key` (+ `transfer_lookup_key`).
+- `GET /v1/prices` — filters `active`, `product`, `type`
+  (`one_time|recurring`), `lookup_keys[]` (stripe-go sends
+  `lookup_keys[0]=…`); paged.
+- Checkout `line_items[].price=<id>` is resolved under the lock in
+  `createCheckoutSession` (`resolvePriceLocked`): unknown → 400
+  `resource_missing`, inactive → 400; the line item takes the product
+  name, amount, currency and interval from the price, then
+  `validateLineItems` runs the mode / interval / currency checks for
+  both kinds. A recurring price needs `mode=subscription`; a one-off
+  price works in `mode=payment`. `serializeSubscription` emits the stored
+  Price object for an item whose id is known, else the synthesised one.
+- Serialized as `billing_scheme=per_unit`, `usage_type=licensed`. Not
+  modelled: tiers, metered usage, `currency_options`, product update.
+
+**API surface (Billing portal).** `stripemock_portal.go`, map
+`portal_sessions` and one global `portal_config`
+(`CancelEnabled`, default true).
+- `POST /v1/billing_portal/sessions` — `customer` required and must be a
+  stored Customer (else 400 `resource_missing`), `return_url`; returns
+  `bps_test_…` with `url` = `<baseURL>/__hamr/stripe/portal?session=<id>`.
+- `POST /v1/billing_portal/configurations` — creates or replaces the
+  single configuration; only `features[subscription_cancel][enabled]` is
+  read. `GET /v1/billing_portal/configurations` lists it (empty until
+  one was posted; sessions always report `configuration` =
+  `bpc_test_default`).
+- Dev page `GET /__hamr/stripe/portal?session=<id>` (400 without the
+  param, 404 unknown): customer email/name, the customer's subscriptions
+  (plan text, status, period end, cancel-at-period-end) and invoices
+  (number, status, total, date). `POST /__hamr/stripe/portal/action`
+  (`session=`, `subscription=`, `action=cancel|keep|card`, same-origin
+  guarded): `cancel` / `keep` flip `cancel_at_period_end` and fire
+  `customer.subscription.updated` (403 when `CancelEnabled` is false —
+  the buttons are hidden too —, 403 when the subscription belongs to
+  another customer, 409 once canceled); `card` is a no-op that redirects
+  back with a notice. "Back" links to `return_url` (`/` when unset).
+- Not modelled: plan switching, payment-method collection, any other
+  configuration feature, `flow`.
+
+**Mock clock.** `stripemock_clock.go`. `now()` = `time.Now()` + persisted
+`clockOffset` seconds, truncated to the second so a period end computed from
+it is reached exactly by an advance to that second. Every object timestamp
+in the mock comes from `now()`, including each event's `created`; the one
+`time.Now()` left in `stripemock_webhook.go` (`deliverEvent`) signs with
+real time so stripe-go's 5-minute tolerance passes. `advanceClock(to)`:
+under the write lock refuses `to` < now (never backwards; `to` == now
+only runs what is already due) and `to` more than `maxClockAdvanceYears`
+(5) ahead, sets the offset from the truncated real time so `now()` lands
+on `to`,
+then repeatedly picks the earliest due subscription
+(`dueSubscriptionsLocked`: live and `dueAt()` — period end, or an earlier
+`cancel_at` — ≤ `to`) and runs `cycleSubscriptionLocked(sub, sub.dueAt())`
+until none is due, so several periods of one subscription and interleaved
+periods of many run in time order, each stamped at its own period end;
+events fire once after the lock is released, each delivery under its own
+30s deadline (`fireEventsAsync`). `parseClockTarget(by, to)`: `by` =
+`<n>d|w|m|y` matched as a whole (months and years via `addMonthsClamped`,
+the same clamping as subscription periods, so "+1 month" from Jan 29
+cannot skip past a Feb 28 period end) else a Go duration (`1m30s`,
+`90m`), `to` = RFC 3339 or all-digit unix seconds; anything else is a
+400. Entry points: `POST /__hamr/stripe/clock` (`by=` | `to=`),
+the subscription row's "Next period", MCP `stripe.advance` (`by` | `to`;
+returns `{now, cycled}`: every subscription the advance acted on, renewed
+or ended). The offset is persisted as
+`clock_offset`; deleting the state file resets it. ponytail: one global
+clock, not per customer as Stripe's test clocks are; map
+`/v1/test_helpers/test_clocks` onto it if an app's tests need that API.
+Consequence for apps: after an advance the mock's timestamps sit ahead of
+the app's wall clock, exactly as under a Stripe test clock — gate access on
+subscription `status` and the `customer.subscription.*` events, not on
+`now < current_period_end`.
+
 **Dev UI (Payout).**
 - `GET /__hamr/stripe/payout?id=<po_id>` — renders amount, expected
   arrival date, connected account tag (if any), method, and Mark
@@ -2311,10 +2863,14 @@ codes, the rule is in the `payoutOutcomes` map in
 `stripemock_payout_page.go` — extend with more outcomes or wire a form
 field through `handlePayoutComplete`.)
 
-**What's not modelled.** Automatic payouts (real Stripe creates payouts
-on a schedule from the connected account's balance). Payout cancel /
-reverse endpoints. The `failed → paid` recovery path that some banks
-trigger after an initial failure. ReconciliationStatus, BalanceTransaction.
+**Connected-account payout events.** Payout events set the envelope's
+top-level `account` to the payout's `Stripe-Account` (`event.Account` in
+stripe-go), on the outcome page and on dashboard resend.
+
+**What's not modelled.** Automatic payouts on a schedule (the dashboard
+"Pay out balance" control stands in). Payout cancel / reverse endpoints.
+The `failed → paid` recovery path that some banks trigger after an initial
+failure. ReconciliationStatus, payout balance transactions.
 
 **Validation.**
 - All line items in a session must share the same currency. Mock surfaces
@@ -2325,7 +2881,8 @@ trigger after an initial failure. ReconciliationStatus, BalanceTransaction.
 **Webhook delivery.** When the user clicks an outcome on the dev UI, the
 mock fires a real signed webhook (HMAC-SHA256 over `<unix>.<payload>`,
 header `Stripe-Signature: t=<unix>,v1=<hex>`) to the configured
-`webhook_url` with `webhook_secret`. The app's existing
+`webhook_url` (snapshot events) or `thin_webhook_url` (thin events) with
+`webhook_secret`. Connected-account events add a top-level `account`. The app's existing
 `webhook.ConstructEvent(body, sig, secret)` verifies it as production. The
 event envelope includes `api_version` (set to the mock's pinned version)
 which clears stripe-go's release-train compatibility check.
@@ -2333,14 +2890,17 @@ which clears stripe-go's release-train compatibility check.
 **Outcome → event mapping (checkout).**
 | Button | Event(s) | Status, payment_status | Redirect |
 |---|---|---|---|
-| Pay Successfully | `checkout.session.completed`, `payment_intent.succeeded`, `charge.succeeded` (PI + Charge materialised) | complete, paid | success_url |
+| Pay Successfully | `checkout.session.completed`, `payment_intent.succeeded`, `charge.succeeded` (PI + Charge created now; the PI id arrives on `checkout.session.completed`, `session.payment_intent` is null before) | complete, paid | success_url |
+| Pay Successfully (`mode=subscription`) | `checkout.session.completed`, `customer.subscription.created`, `invoice.paid`, `invoice.payment_succeeded`, then `payment_intent.succeeded`, `charge.succeeded` (PI hangs off the invoice; `session.payment_intent` stays null) | complete, paid | success_url |
+| Pay Successfully (zero total / 100% coupon) | `checkout.session.completed` only (no PI, no Charge) | complete, no_payment_required | success_url |
 | Card Declined | *(none — synchronous decline)* | stays open | back to checkout page |
 | Cancel Payment | `checkout.session.expired` | expired, unpaid | cancel_url |
 
 **Outcome → event mapping (account onboarding).**
 | Action | Event | State after |
 |---|---|---|
-| Complete Onboarding | `account.updated` | charges_enabled=true, payouts_enabled=true, details_submitted=true, currently_due=[] |
+| Complete Onboarding (v1 account) | `account.updated` | charges_enabled=true, payouts_enabled=true, details_submitted=true, currently_due=[] |
+| Complete Onboarding (v2 account) | thin `v2.core.account[requirements].updated`, thin `v2.core.account[configuration.<cfg>].capability_status_updated` | every capability `active`, requirements entries empty; redirect to link `return_url` |
 
 **Outcome → event mapping (PaymentIntent).**
 | Button | Cascade (in order) | PI status after |
@@ -2356,7 +2916,7 @@ synchronously and fires one webhook async.
 |---|---|---|
 | `refund.New(payment_intent=...)` (full) | `charge.refunded` | refund.status=succeeded, charge.refunded=true |
 | `refund.New(charge=..., amount=N)` (partial) | `charge.refunded` | refund.status=succeeded, charge.amount_refunded += N |
-| `refund.New(... reverse_transfer=true)` | `charge.refunded` | + transfer.amount_reversed += refund.amount |
+| `refund.New(... reverse_transfer=true)` | `charge.refunded`, `transfer.reversed` | + reversal recorded, transfer.amount_reversed += min(refund.amount, remaining) |
 
 **Outcome → event mapping (Payout).**
 | Button | Event | State after |
@@ -2373,7 +2933,7 @@ prevent re-use from a stale browser tab.
 `internal/devserver/stripemock.go` must equal `stripe.APIVersion` from the
 SDK in `go.mod`. A CI test (`TestStripeAPIVersionMatchesSDK`) enforces the
 link, so a `stripe-go` bump fails the build until the constant is bumped in
-lockstep. Current pinned value: `2025-08-27.basil` (matches `stripe-go/v82`).
+lockstep. Current pinned value: `2026-08-26.dahlia` (matches `stripe-go/v86`).
 
 **CSRF guard.** Outcome-recording POST rejects requests whose `Origin`
 header is set and doesn't match the request's `Host`. Requests without an
@@ -2382,15 +2942,54 @@ header is set and doesn't match the request's `Host`. Requests without an
 **Config (`hamr.toml`).**
 ```toml
 [dev.stripe]
-enabled        = true
-webhook_url    = "http://localhost:8080/api/webhooks/stripe"   # required
-webhook_secret = "whsec_dev_..."                               # required
-persist        = true                                          # default
-persist_path   = ".hamr/stripe/state.json"                     # default
+mode                     = "mock"                                           # "off" (default) | "mock" | "listen"
+webhook_url              = "http://localhost:8080/api/webhooks/stripe"      # required unless off
+thin_webhook_url         = "http://localhost:8080/api/webhooks/stripe/v2"   # optional
+connect_webhook_url      = ""                                               # optional; empty = webhook_url
+thin_connect_webhook_url = ""                                               # optional; empty = thin_webhook_url
+thin_events              = ["v2.core.account[requirements].updated", "v2.core.account[configuration.recipient].capability_status_updated"]  # default; listen only
+webhook_secret           = "whsec_dev_..."                                  # required unless off; mock signs every event with it
+persist                  = true                                             # default; mock only
+persist_path             = ".hamr/stripe/state.json"                        # default
 ```
-`enabled = true` requires both `webhook_url` and `webhook_secret`, plus a
-`[proxy]` section (the API and UI both live on the proxy mux); `hamr dev`
-refuses to start otherwise with a typed error.
+Every URL has its localhost port rewritten when `hamr dev` walks the app
+port. The mock sends events carrying a connected `account` to the connect
+URLs when set (`WebhookEndpoint.target`). Any mode but `off` requires both
+`webhook_url` and `webhook_secret`, plus a `[proxy]` section (the API and UI
+both live on the proxy mux); `hamr dev` refuses to start otherwise with a
+typed error. A config (or `.pref.hamr.toml`) that still sets
+`dev.stripe.enabled` fails to load: `dev.stripe.enabled was replaced by mode:
+use mode = "mock" (or "off")`.
+
+**Stripe listen mode.** `stripeSwitch` (`internal/devserver/stripelisten.go`)
+owns the runtime mode behind the `S` hotkey and the `stripe.mode` MCP tool
+(write, area `stripe`; `{"mode":"mock"|"listen"}`, empty flips; returns
+`{"mode"}`; blocks until done). The mock is constructed in both modes. Boot
+applies the configured mode before the initial build (no restart). Listen:
+read `STRIPE_KEY` from `.env` (fallback: hamr's env), refuse empty and
+`sk_live_`/`rk_live_`, start `stripe listen --skip-update --forward-to …
+--forward-connect-to …` plus `--forward-thin-to … --forward-thin-connect-to …
+--thin-events <thin_events>` when `thin_webhook_url` is set, as argv (no
+shell) with `STRIPE_API_KEY` in the child env, output prefixed `stripe` in the
+log; wait 30s for `whsec_…`. Then set the stripe env layer and restart running
+`run` rules + daemons. Injected in both modes: `STRIPE_MOCK` (`true`/`false`),
+`STRIPE_WEBHOOK_SECRET`, `_V2`, `_CONNECT`, `_V2_CONNECT` (mock:
+`webhook_secret`; listen: the CLI's secret); listen mode also injects
+`STRIPE_KEY` (mock leaves it to `.env`, where an injected copy would go stale);
+`HAMR_STRIPE_MOCK_URL` stays in the base layer. A running listener is stopped
+before any switch. A failed flip from mock keeps mock; a failed boot, failed
+key-change restart or a listener exiting on its own falls back to mock. An
+fsnotify watch on `.env` (300ms debounce; acts in listen mode only) restarts
+the listener when `STRIPE_KEY` changes. In listen mode every `.env` event first
+drops the injected `STRIPE_KEY` from the layer without a restart
+(`stripeSwitch.dropKey`), so the site rule's own `.env` restart gives the app
+its fresh `.env` key rather than the old one; `dotenvChanged` puts it back, at
+once when the key is unchanged, else with the new listener's secret. While listening, `StripeMock.listening` makes
+webhook delivery record and return `errStripeListening` ("stripe is in listen
+mode") instead of POSTing, and the MCP gateway returns it for every `stripe.*`
+tool except `stripe.mode`; dashboards and state stay up. `dev.info` reports
+`stripe.mode` (`off`|`mock`|`listen`). Events: `EvStripeMode` data
+`switching`/`mock`/`listen`.
 
 **Persistence.** Single JSON file at `persist_path`, atomically rewritten
 (tmp + rename) on every state mutation under the same lock that gates the
@@ -2398,16 +2997,29 @@ mutation. Loaded on `NewStripeMock` if the path is set; corrupt files
 trigger the `OnPersistError` callback and the mock starts empty (no
 crash). Schema is forward-compatible — `encoding/json` ignores unknown
 fields and zeroes missing ones, so adding fields is safe. Set
-`persist = false` for in-memory-only mode.
+`persist = false` for in-memory-only mode. The file holds sessions,
+accounts, `v2_accounts`, payment intents, charges, transfers (with
+reversals), refunds, payouts, `balance_settings`, `disputes`, `coupons`,
+`promotion_codes`, `subscriptions`, `invoices`, `customers`, `products`,
+`prices`, `portal_sessions`, `portal_config` and `clock_offset` (seconds
+the mock clock runs ahead). The event log and idempotency cache are
+memory-only (async webhook goroutines never write the file).
 
 Why JSON not mbox: Stripe state is plain Go structs (no MIME equivalent),
 so a single JSON document is the natural shape. The file is human-readable
 which helps LLM workflows that want to read prior state across restarts.
 
-**Dashboard.** `GET /__hamr/stripe` renders an index with 5 tables —
-sessions, accounts, PaymentIntents, refunds, payouts — newest-first,
-capped at 25 rows per table. Designed both for human dev use and for
+**Dashboard.** `GET /__hamr/stripe` renders an index with tables for
+sessions, v1 accounts (with balance), v2 accounts (email, configurations,
+stripe_transfers status, balance), PaymentIntents, refunds, payouts,
+disputes and events (`#events`; type with a thin tag, object, account,
+delivered / failed with error on hover / not sent, attempt count) —
+newest-first, capped at 25 rows per table. Designed both for human dev use and for
 LLMs reading the page to inspect prior state.
+MCP `stripe.list` (`stateSummary`) returns the same state as JSON, with
+`customers` (id, email, name, subscription count) and `prices` (id,
+product name, amount, currency, interval, lookupKey, active) so an agent
+can pick a price id for `line_items[].price`.
 
 Per-row actions (all POST endpoints, same-origin guarded):
 - `POST /__hamr/stripe/resend` (`resource=`, `id=`) — re-fires the
@@ -2423,16 +3035,83 @@ Per-row actions (all POST endpoints, same-origin guarded):
   all behave identically.
 - `POST /__hamr/stripe/expire` (`session=`) — marks an open session as
   expired and fires `checkout.session.expired`. 409 on already-terminal.
+- `POST /__hamr/stripe/clock` (`by=` or `to=`) — advances the mock clock
+  (see **Mock clock**); 400 when backwards or unparsable. Rendered as a bar
+  above the tables with the mock time, how far ahead it runs, +1 day /
+  +1 week / +1 month buttons and an advance-to-date input.
+- `POST /__hamr/stripe/subscription` (`subscription=`, `action=next |
+  retry | fail_next | cancel`) — `subscriptionAction`. Rendered per row as
+  "Next period" (not canceled), "Retry payment" (`past_due`), "Fail next
+  renewal" / "Renew normally" (active), "Cancel" (not canceled). Row tags
+  show `trial`, `cancels at period end` and `next renewal fails`. Resend on a
+  subscription re-fires `customer.subscription.updated` (`.deleted` once
+  canceled); on an invoice `invoice.paid` + `invoice.payment_succeeded`,
+  `invoice.payment_failed` while open, or `invoice.voided` once void.
+- Tables added for customers (id, email, name, subscription count),
+  prices (id, product name, amount + interval or one-time, lookup key,
+  active), subscriptions (status, customer, plan text, period end),
+  invoices (number, subscription, status, total with discount tag, period,
+  billing reason) and coupons (id, name, off, duration, redeemed / max,
+  promotion codes with an `inactive` tag). Session rows show the amount
+  after discount with the coupon id as a tag.
+- `POST /__hamr/stripe/resend` (`event=`) — redelivers a logged event by
+  id (synchronously, result shown on the row); 404 for an unknown id.
+- `POST /__hamr/stripe/dispute`, `/__hamr/stripe/dispute/close`,
+  `/__hamr/stripe/payout/account` — see Disputes above. Rendered as
+  "Dispute" on succeeded, undisputed PIs; "Close: won" / "Close: lost" on
+  open disputes; "Pay out balance" on connected accounts with a non-zero
+  balance; "Onboard" on v2 accounts not yet onboarded.
+
+**Read-only fake dashboards.** `stripemock_views.go`. Laid out like
+Stripe's dashboards so QA reads them the same way; hamr dark styling, a
+"hamr mock" badge, no Stripe logo or branding, and no forms (GET only;
+POST → 405). The control page links to them.
+- `GET /__hamr/stripe/dashboard[/<section>]` — platform. Sections: home
+  (balance cards, 10 recent payments, 5 recent payouts), `payments` (one row
+  per PaymentIntent joined with charge/refunds/dispute: status succeeded |
+  refunded | partially_refunded | disputed | failed | incomplete |
+  uncaptured | canceled, card, customer = receipt email, fee, Connect
+  destination or direct account, metadata), `balances` (balance per
+  currency + `platformLedger()` rows: type, amount, fee, net, description,
+  source), `connect` (v1 + v2 accounts: status complete/restricted, API,
+  dashboard type, country, balance, link to Express view), `transfers`,
+  `payouts` (platform only), `disputes`, `events` (event log with delivery
+  result and pretty payload). Unknown section → 404. 100 rows per table.
+- `GET /__hamr/stripe/express/<account>` — one connected account (v1 or
+  v2): balance, payout schedule text from `balanceSettingsFor`, payouts on
+  the account, activity (`connectedLedger()` minus payouts), capabilities
+  and outstanding requirements. Unknown account → 404.
+- Ledgers (`stripemock_ledger.go`) are derived from stored objects on every
+  read. Platform: charges (+captured, fee `stripeFee`), refunds, transfers
+  (−), reversals (+), dispute withdrawal (−amount, fee 2000) and reversal
+  when won (+amount, fee 0), platform payouts; direct charges (PI with `Stripe-Account`)
+  count on the connected account, with only the application fee on the
+  platform. Connected: transfers in (payment), reversals (payment_refund),
+  direct charges (fee = Stripe fee + application fee), their refunds,
+  payouts. Failed/canceled payouts net to zero. No pending/available split.
+  `connectedBalance` (used by the control page and "Pay out balance") sums
+  the connected ledger.
 
 **Dev panel button.** `sseConfig.StripeMock` (JSON key `stripe_mock`) is
-set when `[dev.stripe].enabled = true`. The dev-panel JS in `reload.js`
+set when `[dev.stripe]` is on (either mode). The dev-panel JS in `reload.js`
 renders an "Open Stripe mock" shortcut alongside the existing "Open mail
 inbox" button when this flag is present.
 
 **Scaffold integration.** `hamr new --stripe` generates a single random
-`whsec_dev_<32 hex>` at scaffold time and writes it to both `.env`
-(`STRIPE_WEBHOOK_SECRET=...`) and `hamr.toml` (`[dev.stripe].webhook_secret`)
-so the two stay in sync. Generated `cmd/site/main.go` reads `STRIPE_MOCK`
+`whsec_dev_<32 hex>` at scaffold time and writes it to `.env`
+(`STRIPE_WEBHOOK_SECRET=...` and `STRIPE_WEBHOOK_SECRET_V2=...`) and
+`hamr.toml` (`[dev.stripe].webhook_secret`) so they stay in sync;
+`hamr.toml` also gets `thin_webhook_url =
+"http://localhost:8080/api/webhooks/stripe/v2"`. The API package gets
+`Deps.WebhookSecret`, `Deps.WebhookSecretV2`, `Deps.StripeClient` and two
+routes: `POST /api/webhooks/stripe` → `HandleWebhook`
+(`webhook.ConstructEvent`, stubs for every snapshot event the mock fires,
+incl. `transfer.reversed` and the four `charge.dispute.*`) and
+`POST /api/webhooks/stripe/v2` → `HandleThinWebhook`
+(`client.ParseEventNotification`, stubs for the two v2 account thin events;
+the capability stub retrieves the account via `V2CoreAccounts.Retrieve`).
+The old `account.updated` stub is gone — v2 accounts never emit it.
+Generated `cmd/site/main.go` reads `STRIPE_MOCK`
 and conditionally calls `stripe.SetBackend(...)`:
 ```go
 stripe.Key = envStripeKey
@@ -2446,6 +3125,7 @@ if envStripeMock {
         &stripe.BackendConfig{URL: stripe.String(envHamrStripeMockURL)},
     ))
 }
+stripeClient := stripe.NewClient(envStripeKey) // after SetBackend, so it inherits the mock backend
 ```
 `.env.example` ships with `STRIPE_MOCK=true` and a non-empty `STRIPE_KEY`.
 The mock URL is auto-injected by `hamr dev` as `HAMR_STRIPE_MOCK_URL`,
@@ -2462,25 +3142,37 @@ also set `DEV_MODE=true`.
 
 **Hamr-injected env vars.** When `hamr dev` spawns the site process it
 sets two env vars derived from `hamr.toml` config:
-- `HAMR_DEV_URL=http://localhost:<proxy_port>` when either `[dev.email]`
-  or `[dev.stripe]` is enabled. The scaffold's email mock client uses it.
+- `HAMR_DEV_URL=http://localhost:<proxy_port>` when `[dev.email]`,
+  `[dev.sms]`, or `[dev.stripe]` is enabled. The scaffold's email mock
+  client uses it, as does `smsmock.New`.
 - `HAMR_STRIPE_MOCK_URL=http://localhost:<proxy_port>` when
-  `[dev.stripe].enabled = true`. Scaffolded `main.go` points stripe-go
-  at this URL when `STRIPE_MOCK=true`.
+  `[dev.stripe]` is on. Scaffolded `main.go` points stripe-go
+  at this URL when `STRIPE_MOCK=true`. The per-mode Stripe vars
+  (`STRIPE_MOCK`, `STRIPE_KEY`, `STRIPE_WEBHOOK_SECRET*`) come from the
+  stripe env layer (see **Stripe listen mode**).
 
 These pre-set vars win over `.env` (godotenv.Load doesn't overwrite
 already-set env), so users can't accidentally drift the mock URL from
 the actual proxy port. Hamr knows its own URL — nothing in `.env` should
 be more authoritative than that.
 
-**Known limits.** Mocked today: checkout sessions, Connect account
-onboarding (`Account` + `AccountLink`), Connect-aware PaymentIntents
-(with auto-cascade to Charge + Transfer on success), Refunds
-(sync-success with `reverse_transfer` and `refund_application_fee`),
-and Payouts (manual create + paid/failed outcomes, scoped list for
-marketplace dashboards). Not yet mocked: standalone Transfer create,
-Customer, Price, Subscription, Invoice, Dispute, GET endpoints for
-Charge / Transfer / ApplicationFee. Patterns are established in
+**Known limits.** Mocked today: checkout sessions (incl. expire, payment
+and subscription mode, discounts), coupons and promotion codes, Connect
+account onboarding on v1 (`Account` + `AccountLink`) and v2
+(`/v2/core/accounts`, `/v2/core/account_links`, thin events),
+Connect-aware PaymentIntents (with auto-cascade to Charge + Transfer on
+success), Refunds (create, retrieve, list; `reverse_transfer` and
+`refund_application_fee`), Transfers + reversals, balance transactions and
+balance settings, dashboard-driven disputes, Payouts (manual create +
+paid/failed outcomes, scoped list, dashboard balance payout),
+subscriptions and invoices driven by the mock clock, Customers, Products
+and Prices (`line_items[].price=<id>` at checkout), the billing portal
+(sessions, one configuration, a dev page that cancels at period end). Not
+yet mocked: `POST /v1/subscriptions`, `trial_period_days`, proration, plan changes,
+Customer delete, product update, metered / tiered prices, portal plan
+switching and payment-method collection, `/v1/test_helpers/test_clocks`, transfer/reversal list endpoints, v2
+account update/close, dispute evidence, GET endpoints for Charge /
+ApplicationFee. Patterns are established in
 `internal/devserver/stripemock*.go` — add as needed. State is persisted
 by default to `.hamr/stripe/state.json` and reloaded across `hamr dev`
 restarts; set `persist = false` for ephemeral in-memory-only mode.
@@ -2673,6 +3365,329 @@ not bind `hamr dev`'s proxy to a public interface.
 - Single shared inbox — no per-user segmentation
 - No webhook simulation, no open/click tracking simulation
 
+### sms
+
+> Package sms defines a provider-agnostic `Sender` interface for
+> transactional SMS and the value types that flow through it. Apps depend on
+> the interface; concrete implementations (real provider adapters, smsmock)
+> plug in at startup.
+
+```go
+type Sender interface {
+    Send(ctx context.Context, msg Message) (*Result, error) // concurrency-safe
+}
+
+type Message struct {
+    From string            // sender: E.164 number ("+15551230000") or short code
+    To   string            // recipient: E.164 number
+    Body string            // message text
+    Ref  string // correlation reference (Vonage client-ref, MessageBird reference)
+}
+
+type Result struct { ID string } // provider-assigned message id, may be empty
+```
+
+Provider-specific features (alphanumeric sender IDs, MMS media, delivery
+callbacks, messaging services) live in the app's own adapter — not the
+interface.
+
+**Typical wiring:**
+```go
+var sender sms.Sender
+if os.Getenv("SMS_MOCK") == "true" {
+    sender = smsmock.New(os.Getenv("HAMR_DEV_URL"))
+} else {
+    sender = myapp.NewTwilioSender(sid, token)
+}
+```
+
+### smsmock
+
+> Package smsmock is a dev-only `sms.Sender` that ships messages to the hamr
+> dev server's in-memory inbox at `/__hamr/sms`. It validates how the app
+> uses `sms.Sender`, not the production provider adapter's wire format.
+
+```go
+func New(baseURL string) *Client
+func (c *Client) Send(ctx context.Context, msg sms.Message) (*sms.Result, error)
+
+var (
+    ErrInvalidNumber = errors.New("smsmock: invalid recipient number")
+    ErrUndeliverable = errors.New("smsmock: recipient undeliverable")
+)
+```
+
+JSON-encodes `msg` and POSTs to `<baseURL>/__hamr/sms/ingest`. On 200 returns
+the server-assigned `*sms.Result{ID}`; on 422 maps the magic-number body to a
+sentinel error. Request timeout 10s. Trailing slashes on baseURL stripped.
+
+**Magic recipient numbers** (digits-only suffix of `To`; formatting like
+spaces/dashes ignored, so `+1 500 555-0001` matches; the fictional 555
+exchange keeps real numbers from matching):
+- ends `5550001` → `ErrInvalidNumber` (server refuses with `{"error":"invalid_number"}`)
+- ends `5550002` → `ErrUndeliverable` (`{"error":"undeliverable"}`)
+Matching messages are never stored.
+
+**Dev inbox UI** (served at `/__hamr/sms` on the hamr dev proxy):
+- Newest-first list, substring search across from/to/body
+- Detail view: full body, correlation ref, character count
+- Outcome simulation: per-message "mark failed" (with note) / "mark delayed"
+  (seconds) — post-hoc status tagging, distinct from send-time magic numbers
+- Per-message delete + full-inbox clear
+- Dev panel renders an "Open SMS inbox" shortcut when `sse_config.sms_mock`
+  is set
+
+**HTTP ingest** (plain HTTP, any language):
+```
+POST /__hamr/sms/ingest
+{"From":"+15551230000","To":"+15559870000","Body":"your code is 123456"}
+→ 200 {"ID":"sms_..."} | 413 {"error":"message too large"} (64 KiB cap)
+→ 422 {"error":"invalid_number"} | {"error":"undeliverable"}
+```
+
+**Server-side config** (in `hamr.toml`):
+```toml
+[dev.sms]
+enabled      = true                     # opt-in; default false
+max_messages = 500                      # ring-buffer size; oldest evicted first
+persist      = true                     # default; mirror inbox to JSONL file
+persist_path = ".hamr/sms/inbox.jsonl"  # default
+```
+Requires `[proxy]` — inbox UI lives on the proxy mux; `hamr dev` refuses to
+start otherwise.
+
+**Persistence format.** JSONL: one JSON message per line, oldest first.
+Atomic whole-file rewrite on evict/delete/clear/status change; O_APPEND fast
+path for new messages. Corrupt lines are skipped on load. Survives `hamr dev`
+restart; set `persist = false` for in-memory only.
+
+**CSRF guard.** Same as the mail mock: mutating POSTs reject cross-origin
+requests (Origin set and ≠ Host); absent Origin passes. Unauthenticated —
+don't bind the proxy to a public interface.
+
+**Dev-only.** No production guards. Gate on `SMS_MOCK=true` in `main.go`.
+
+**Known limits.**
+- Text only: no MMS media, delivery receipts, or inbound-reply simulation
+- Single shared inbox — no per-user segmentation
+
+---
+
+### devactions
+
+> Package devactions exposes app-defined dev/staging actions (wipe, reseed,
+> create account, ...) and test accounts to hamr over one token-gated endpoint.
+
+```go
+const Prefix = "/_devactions"
+
+type InputType string // InputText "text", InputNumber "number", InputBool "bool", InputSelect "select"
+
+type Input struct {
+    Name, Label string
+    Type        InputType
+    Options     []string // InputSelect only
+    Default     string
+    Required    bool
+}
+
+type Action struct {
+    Name, Label, Description string
+    Inputs    []Input
+    Dangerous bool
+    Run       func(ctx context.Context, in map[string]string) (message string, err error)
+}
+
+type Account struct{ Email, Password, Label, Phone string } // Phone optional
+
+type Registry struct {
+    Accounts   func(ctx context.Context) ([]Account, error)
+    Disposable func(ctx context.Context) (bool, error)
+    WhoAmI     func(r *http.Request) (*Account, error) // optional; SessionWhoAmI(sm, lookup) builds it from pkg/auth
+}
+
+func (r *Registry) Register(a Action) // panics on empty or duplicate Name, "whoami" (reserved), or a Name outside [A-Za-z0-9._-] / "." / ".."
+func (r *Registry) Handler() http.Handler
+```
+
+`Handler()` returns nil unless `HAMR_ACTIONS_TOKEN` is non-empty and
+`HAMR_ACTIONS_ENV` is `development` or `staging`. It panics if a `Dangerous`
+action is registered without `Registry.Disposable`. Mount it on the root echo
+instance at `Prefix` and `Prefix+"/*"` (it matches the full path), outside
+CSRF/session/auth middleware — the scaffold does this in `internal/web/server.go`
+via `Deps.DevActions` (nil when the gate fails).
+
+**Wire format.** Every request needs `X-Hamr-Actions-Token` (constant-time
+compare; 401 otherwise).
+```
+GET  /_devactions        → 200 {"actions":[{name,label,description,dangerous,inputs:[{name,label,type,options,default,required}]}],
+                                "accounts":[{email,password,label}]}
+POST /_devactions/<name> {"inputs":{...},"confirm":true} → 200 {"message":"..."}
+GET  /_devactions/whoami → 200 {"account":{email,label,phone}} | {"account":null}; 404 without WhoAmI (no password)
+errors {"error":"..."}: 400 bad input/body | 401 token | 404 unknown action | 405 method
+                        | 409 dangerous without confirm | 412 not disposable | 500 Run/Accounts error
+```
+Inputs reach `Run` as strings; empty falls back to `Default`; `Required`,
+number, bool (`true`/`false`) and select-option validation happens before `Run`.
+
+**Dangerous actions** need `"confirm": true` and `Disposable()` returning true.
+The scaffold's `Disposable` checks for the `hamr_disposable` table, which only
+the dev seed creates. On a fresh database run `make seed` (`go run ./cmd/site --seed`) once, after
+migrations, before dangerous actions unlock.
+
+**Staging.** Set the same `HAMR_ACTIONS_TOKEN` on `hamr mock-serve` (front-door
+mode) and on the app, plus `HAMR_ACTIONS_ENV=staging` on the app. `hamr dev`
+injects both automatically.
+
+---
+
+### flags
+
+> Package flags provides feature flags stored in the app's own database:
+> typed flags declared in code, per-user evaluation with an allow-list,
+> roles and sticky percentage rollout, and an in-memory cache kept fresh by
+> database change listeners.
+
+For safe rollout (ship dark, 10% then 100%, or off). Not experimentation: hamr
+never measures outcomes. Opt-in at scaffold with `hamr new --feature-flags`
+(wizard question "Feature flags"). Import as `hflags`
+(`github.com/FyrmForge/hamr/pkg/flags`); the app's own package is also named
+`flags`.
+
+#### Declaring and reading
+
+```go
+// internal/flags/flags.go
+var (
+    NewCheckout = hflags.Bool("new_checkout", false)
+    MaxUploads  = hflags.Int("max_uploads", 5)
+    Banner      = hflags.String("banner", "")
+    Theme       = hflags.JSON("theme", ThemeCfg{})
+)
+
+func Bool(key string, def bool) *Flag[bool]   // also Int, String, JSON[T any]
+func (f *Flag[T]) Get(ctx context.Context) T
+func (f *Flag[T]) Key() string
+func (f *Flag[T]) Default() T
+func Definitions() []Definition // {Key, Type (bool|int|string|json), Default json.RawMessage}, sorted by key
+func Override[T any](ctx context.Context, f *Flag[T], v T) context.Context // tests
+```
+
+Declaring a key twice, or a key outside `^[a-z0-9][a-z0-9_.-]*$`, panics at init. JSON `Get` decodes a fresh `T` per call (safe to mutate). `cmd/site/main.go` must import the flags
+package (blank import is fine) or its flags never register. `Get` never errors
+or panics: no client on ctx, no rule, disabled rule, user does not match, or a
+stored value that does not decode (one warning logged per load) → code
+default.
+
+#### Rules and matching
+
+```go
+type Rule struct {
+    Key      string
+    Enabled  bool
+    Value    json.RawMessage // served when the rule matches
+    Subjects []string        // allow-list of subject IDs
+    Roles    []string
+    Percent  int             // 0-100
+}
+```
+
+A disabled rule never matches. An enabled rule matches when the subject ID is
+in `Subjects`, or any role is in `Roles`, or `Percent >= 100`, or
+`hash(key + "\x00" + subjectID) % 100 < Percent`. The bucket is sticky: a user
+keeps the same value with no stored assignment.
+
+Empty or `null` value: a bool flag reads `true` (enabling means "on"); int,
+string and JSON flags serve the code default.
+
+Logged-out visitors have no subject ID. By default only ID-free rules apply
+(enabled at 100%, or off); a partial percent serves the code default. Opt in
+with `WithAnonymousCookie(name)`: a random first-party ID cookie (HttpOnly,
+SameSite Lax, 1 year, Secure when `Scheme()` is https incl. X-Forwarded-Proto from a private peer or `WithTrustedProxies` peer) is hashed instead. This cookie is likely not "strictly
+necessary" under ePrivacy, so the app may need consent / a cookie banner.
+
+#### Client
+
+```go
+type Store interface {
+    List(ctx context.Context) ([]Rule, error)
+    Save(ctx context.Context, r Rule) error // upsert by key
+}
+func NewMemStore(rules ...Rule) Store       // tests; real Client over it evaluates like prod
+
+func New(store Store, opts ...Option) *Client
+func (c *Client) Start(ctx context.Context) error // load, watcher, safety poll until ctx ends
+func (c *Client) Set(ctx context.Context, r Rule) error
+func (c *Client) Rules() []Rule
+func (c *Client) For(ctx context.Context, w Who) context.Context // background jobs
+func (c *Client) Middleware(who WhoFunc) echo.MiddlewareFunc
+
+type Who struct{ SubjectID string; Roles []string }
+type WhoFunc func(c echo.Context) Who
+```
+
+`Start` returns a load error but the client stays usable (serves code defaults,
+keeps retrying). `Set` rejects unknown keys, `Percent` outside 0-100 and values
+that do not decode into the flag's type (each error wraps `ErrInvalid`, safe
+to show to users; other errors come from the store); it saves, then updates the local cache
+at once. `Middleware` must run after the auth middleware; it puts the client
+and `Who` on the request ctx and adds a `flags` group (every declared flag's
+value) to the context logger (`pkg/logging`), so each log line of the request
+traces back to flag values. Scaffold mounts it on site routes only; `/api`
+and `hamr add service` handlers get code defaults unless they use
+`client.For`. `WhoFunc` is app code: map the auth subject to ID
+and roles.
+
+#### Options
+
+| Option | Effect |
+|---|---|
+| `WithLogger(*slog.Logger)` | Logger for warnings. Default `slog.Default()` |
+| `WithPollInterval(d)` | Safety-net full reload. Default 5m |
+| `WithPostgres(*sql.DB)` | `LISTEN` on a pgx-backed DB; reload on every notify and after every reconnect. Pins one pooled connection: pool needs at least 2, or use `WithDirectURL`; on a 1-conn pool it logs an error and stays poll-only |
+| `WithDirectURL(url)` | Postgres: open an own pgx connection for LISTEN. Needed behind PgBouncer in transaction mode (scaffold env `FLAGS_DIRECT_DATABASE_URL`) |
+| `WithSQLite(*sql.DB)` | Poll `PRAGMA data_version` ~1s, reload when it changes (other processes' writes). On a single-connection pool the connection is borrowed per tick |
+| `WithAnonymousCookie(name)` | Anonymous ID cookie for logged-out percent rollout (consent warning above) |
+
+#### Table and trigger
+
+```go
+const Table = "feature_flags"
+const Channel = "hamr_feature_flags"
+const PostgresTriggerSQL = `...` // idempotent, multi-statement
+```
+
+Columns: `key TEXT PRIMARY KEY`, `enabled` (pg `BOOLEAN NOT NULL DEFAULT FALSE`,
+sqlite `INTEGER NOT NULL DEFAULT 0`), `value TEXT NOT NULL DEFAULT 'null'`,
+`subjects TEXT NOT NULL DEFAULT '[]'`, `roles TEXT NOT NULL DEFAULT '[]'`
+(JSON arrays), `percent INTEGER NOT NULL DEFAULT 0`, `updated_at` (pg
+`TIMESTAMPTZ NOT NULL DEFAULT NOW()`, sqlite `TEXT NOT NULL DEFAULT
+CURRENT_TIMESTAMP`). On Postgres the trigger runs `pg_notify(Channel, '')` on
+every insert/update/delete/truncate, so hand-written SQL notifies too. Existing
+projects create the table and run `PostgresTriggerSQL` by hand (full SQL and a
+`Store` sketch in `docs/guide/pkg/flags.md`).
+
+#### Scaffold and dev widget
+
+`hamr new --feature-flags` (`ProjectConfig.IncludeFlags`) adds: the table in
+`001_initial` (trigger SQL via `ProjectConfig.FlagsTriggerSQL()`; gorm runs it
+after AutoMigrate in one advisory-locked transaction), `internal/repo/.../flags.go` (`Store.Flags()`),
+`internal/flags/flags.go` (example flag `example_banner`), client wiring in
+`cmd/site/main.go` (`Deps.Flags`, env `FLAGS_DIRECT_DATABASE_URL` on
+Postgres), the middleware in `internal/web/server.go` after `auth.Load()`, and
+a `set-flag` dev action. With auth and user tables it also adds `/admin/flags`
+behind `RequireRoles(..., "admin")`: `GET /admin/flags` lists every declared flag (key, type, Rule badge No rule / Disabled / Everyone / Listed only / N%, Serving = what the rule's audience gets or the code default) with a one-click button (`POST /admin/flags/:key/toggle`: bool flags always show "Serve <opposite of what users get now>", which enables the rule, sets that value, keeps the audience, and creates an Everyone rule when none exists; other types show "Enable rule"/"Disable rule", flipping Enabled only, hidden without a saved value) and Edit (`GET /admin/flags/:key`, saved by `POST /admin/flags/:key`, 422 re-render on error, redirect to the list on success). On the edit form the value input follows the flag type (On/Off select for bool, saving `true`/`false`; number, text without quotes, JSON textarea; empty saves `null`); an "Audience" radio
+(Everyone saves Percent 100; Only listed users & roles saves 0 and needs a subject or role; Percentage of users plus listed uses the percent field, 0 allowed; no rule
+shows Everyone and the edit form pre-ticks Enabled) and saves through `Client.Set`. `ErrInvalid` errors show as
+"Could not save: <reason>."; store errors are logged and show a generic
+message.
+
+`DevAction(c *Client) devactions.Action` returns the `set-flag` action (key
+select, enabled, value JSON, percent, subjects, roles) for the hamr dev widget.
+Empty percent means 0 when subjects or roles are given, else 100.
+The reply is "<key>: <value> for N%" when a value is set, "on for N%" otherwise, "off" when disabled.
+Build it after flags are declared: it reads the flag list when called.
+
 ---
 
 ## CLI Commands
@@ -2690,6 +3705,13 @@ Two commands refuse to run on version mismatch (released CLI builds only):
 
 Both accept `--skip-version-check` to bypass. Dev builds of the CLI (no
 release tag) skip both checks entirely.
+
+### `hamr new --feature-flags`
+
+Opt-in feature flags (`pkg/flags`): `feature_flags` table, store, client
+wiring, `set-flag` dev widget action, and an `/admin/flags` page when auth with
+user tables is on. Also asked by the interactive wizard ("Feature flags",
+default no). See `### flags`.
 
 ### `[dev].port_walk` and `hamr env`
 
@@ -2712,7 +3734,10 @@ When a port walks, values in `.env` referencing it (`DATABASE_URL`,
   pairs. The scaffold's `Makefile` ships an `ENV_LOAD := eval
   "$(hamr env --export)"` prefix on `migrate`, `db-sh`, `generate`,
   `e2e-local`. `hamr sync` invoked standalone reads `walks.json`
-  itself — no wrapping needed.
+  itself — no wrapping needed. For compose calls specifically, `hamr compose
+  [args...]` re-exports the same merged file set hamr uses (base +
+  `.hamr/compose.<name>.override.yaml`), so external `docker compose`
+  invocations don't reconcile the stack back onto un-walked ports.
 
 Match rules for which `.env` values get rewritten:
 
@@ -2752,11 +3777,13 @@ Per entry, hamr decides between two paths:
 
 - **Adopt** — every expected service (`dc.Services` if set; otherwise
   every service in the compose file) is `running` AND ready (`healthy`
-  or no healthcheck defined). hamr skips `compose up -d` entirely and
-  leaves the override file alone. Shifts for env injection come from
-  diffing the `compose ps` published ports against the base compose
-  file, so `DATABASE_URL` on the spawned app still points at whatever
-  port a prior session walked the db to.
+  or no healthcheck defined). hamr skips `compose up -d` entirely.
+  Shifts for env injection come from diffing the `compose ps` published
+  ports against the base compose file (docker's IPv4 and IPv6 rows for
+  one binding count once), so `DATABASE_URL` on the spawned app still
+  points at whatever port a prior session walked the db to. The override
+  file is rewritten to those live ports, so a deleted override comes
+  back.
 - **Apply** — at least one expected service is missing, exited,
   `unhealthy`, or `starting`. hamr walks only the non-running services
   (peers stay on whatever ports they're already bound to), passes the
@@ -2772,9 +3799,11 @@ Per entry, hamr decides between two paths:
   unhealthy peer.
 
 Override management is state-aware: a stale `.hamr/compose.<name>.override.yaml`
-is only auto-removed when the project has zero running containers AND
-nothing drifted. Anything running → leave the override alone. This
-keeps `keep_running` containers from bouncing on the next session.
+is only auto-removed when nothing drifted from base AND every running
+service's declared ports were matched to a live published port. If a
+running service's ports can't be matched, hamr keeps the override and
+logs a `WARN` (its `.env` rewrite may be missing). This keeps
+`keep_running` containers from bouncing on the next session.
 
 Adoption applies regardless of `keep_running` — that flag governs
 shutdown only. If a `keep_running = false` stack is somehow already up
@@ -2787,7 +3816,7 @@ up, the running containers keep their old config; hamr logs a `WARN`
 per adopted-on-non-base-port service. To apply edits, wipe the stack
 from the browser dev panel, run `docker compose down -v` directly, or
 wire it into a Makefile target and trigger it via the TUI's `m`
-fuzzy palette.
+make palette.
 
 The file is the contract surface between the writer (hamr dev) and the
 readers (`hamr env`, `hamr sync`, scaffold Makefile, scaffold
@@ -2821,16 +3850,23 @@ this automatically.
 ### hamr dev (terminal hotkeys)
 
 `hamr dev` runs as a bubbletea-driven TUI with a scrollable log viewport,
-a status bar, modal overlays, and an `m` hotkey opening a fuzzy palette
-over the project's `./Makefile` targets so docker wipes, migrations,
+a status bar, modal overlays, a `:` command palette (fuzzy list of hamr
+commands plus `make:<target>` entries), and an `m` hotkey opening it
+pre-filtered to the project's `./Makefile` targets so docker wipes, migrations,
 and any other project-defined scripts can be triggered from inside dev.
 
 | Key                | Action                                                 |
 |--------------------|--------------------------------------------------------|
 | `r`                | Rebuild all watch rules in topological order           |
-| `o`                | Open the proxy URL in the default browser              |
+| `R`                | Restart the dev server (full startup lifecycle, 5s cooldown) |
+| `R` (parked)       | Retry now when stuck on a `hamr.toml` parse error      |
+| `o`                | Open the proxy URL (the tunnel URL while it's on)      |
 | `c`                | Clear the active tab's log buffer                      |
-| `m`                | Run a Makefile target (fuzzy palette over `./Makefile`)|
+| `:`                | Command palette: hamr commands + `make:<target>`, fuzzy |
+| `m`                | Palette pre-filtered `make:` (no-op without a Makefile)|
+| `M`                | Toggle the MCP gateway (`[dev.mcp]`)                   |
+| `T`                | Toggle the public tunnel (`[dev.tunnel]`)              |
+| `S`                | Flip Stripe mock ⇄ `stripe listen` (`[dev.stripe]`)    |
 | `Tab` / Shift+Tab  | Cycle log tabs (hamr ↔ docker stacks)                  |
 | `/`                | Search active tab (case-insensitive substring, live)   |
 | `n` / `N`          | Next / previous search match                           |
@@ -2847,22 +3883,110 @@ and any other project-defined scripts can be triggered from inside dev.
 | Ctrl+click         | Toggle one line in/out of the selection                |
 | `y`                | Copy selected lines to clipboard (raw text)            |
 
+### hamr dev (event bus)
+
+The dev server has exactly one event stream — `SSEBroker` in
+`internal/devserver/sse.go` — and every consumer subscribes to it: the
+browser dev panel over HTTP (`Handler()`), the TUI in-process
+(`Subscribe()`, which returns a buffered channel and a cancel func).
+Each subscriber's buffer holds 16 events and never blocks the sender, so
+a rebuild's output burst would otherwise discard the state events a
+status bar needs and strand a finished build as still running. Two rules
+prevent that. `Broadcast` drops `EvOutput` on a full buffer but lets any
+other event evict the oldest entry to make room — a lost log line costs
+one line of scrollback, a lost `build_ok` leaves a build showing as
+running. Eviction is serialized per client by a mutex, since `Broadcast`
+runs under a read lock and an unguarded evict-then-retry lets a
+concurrent sender take the freed slot. And
+`Subscribe(exclude ...string)` takes event types to leave out: the TUI
+passes `EvOutput`, since process output reaches its viewport through the
+`ProcessManager` sinks, not the bus. The browser panel renders the log
+overlay, so it keeps output and relies on eviction.
+Events are typed constants (`EvBuilding`, `EvBuildOK`, `EvBuildError`,
+`EvOutput`, `EvReload`, `EvShutdown`, `EvDarkFilter`, `EvRestarting`,
+`EvMakeStart`, `EvMakeDone`, `EvComposeUp`, `EvComposeOK`,
+`EvTunnelStart`, `EvTunnelUp`, `EvTunnelDown`), never
+string literals.
+
+The rule, recorded in `docs/adr/004-dev-event-bus.md`:
+
+- **State goes out on the broker.** New dev-server state means a new
+  `Ev*` constant and a `case` in the consumers that care — never a new
+  `WithXHook` runner option.
+- **Actions go in through `DevActions`.** `RebuildAll`, `RestartServer`,
+  `RunMake`, the docker operations. A consumer never spawns a process
+  itself; one that does is the only consumer that can see the output,
+  which is exactly the bug this replaced (TUI-launched make runs used to
+  be invisible to MCP `logs.read`).
+
+MCP access control stays at the edge: `[dev.mcp] make_targets` is
+checked in the `make.run` handler, not inside `RunMake`, so the
+whitelist that governs agents doesn't silently restrict the developer's
+own `m` hotkey.
+
+The hint bar lists only `r` rebuild, `o` open, `m` make (if a Makefile
+exists), `:` commands, `/` search, `? help`, `q` quit; every other binding
+is in `?` help and the palette.
+
+The TUI hint bar carries a single system indicator, pinned bottom-right
+(the hints to its left truncate first on a narrow terminal), fed entirely by
+these events, so it lights up for work triggered from anywhere (file
+save, hotkey, browser, agent). It is a stock-ticker marquee, not a
+priority chain: every item in flight — `building <rule>` (the initial
+build included), `starting <name>` for a compose entry coming up,
+`make <target>`, `tunnel starting`/`tunnel stopping` — is joined with ` • ` and scrolls right-to-left
+through a window of `max(min(32, width/3), 10)` cells, wrapping around.
+Content that fits the window does not scroll. Each item carries a
+braille spinner frame (`⠋⠙⠹…`, 100ms cadence); travel is one cell per
+two frames (5 cells/sec), driven off the same counter so there is one
+timer, and the tick chain starts when the bar goes busy and stops the
+moment it goes idle, so an idle TUI repaints nothing.
+
+`restarting` is exclusive and shows alone (the server is unwinding).
+`ERR: <rules>` joins as a final item without a spinner and turns the
+whole strip red, so a rebuild fixing a failing rule stays visible
+instead of being hidden behind the error — one style per frame, because
+slicing ANSI mid-escape as the window moves isn't worth it. Idle and
+healthy is `● OK`. Concurrent runs are allowed; an item leaves the
+ticker only when the rule or target it names reports done, and
+`EvBuildError` is matched by the `rule` field of its JSON payload so a
+failure clears only the entry that failed.
+
+The TUI model holds this as one flat `active []string` of formatted
+labels rather than a field per kind: the ticker only ever needs "what
+is happening", and every kind shares the same add-on-start /
+remove-on-finish lifecycle. Startup events are not a race — the actions
+hook (and so the TUI's `Subscribe()`) fires at devserver.go:405, well
+before the compose loop and the initial-build loop, and
+`program.Send(actionsReadyMsg)` on the runner goroutine blocks until
+the bubbletea program is actually running.
+
 The runner also spawns one `docker compose --ansi=always -f <file> logs -f --tail=50` follower per `[[dev.docker_compose]]` entry. Output flows into a dedicated per-entry buffer that Tab cycles through; the status bar's left badge switches between 🔨 `hamr dev` and 🐳 `<stack-name>` to indicate which buffer the viewport is showing. Followers self-restart after a wipe so the stream resumes once `up -d` brings the project back. `--ansi=always` is the top-level compose flag that forces colour through despite the no-TTY pipe target, so per-service prefix colours and any container ANSI render correctly inside the bubbles viewport.
 
 Search (`/`) is per-tab, case-insensitive substring, and incremental — matches recompute on every keystroke and the viewport jumps to the first hit as you type, with yellow highlights for matches and a brighter orange for the cursored one. `↩` locks the query in so `n`/`N` start navigating instead of being treated as more query characters; `Esc` cancels. After commit, `f` toggles a filter view that shows only lines containing the search term (press `f` again to restore the full view); n/N still navigates inside the filtered view. New log lines arriving while a search is in progress are scanned and the `[k/n]` counter updates automatically.
 
-`m` opens a fuzzy palette listing every target in the project-root
-`./Makefile` (parsed lazily on press; targets appear in declaration
-order on empty query, ranked by `sahilm/fuzzy` as the user types).
-The hotkey is hidden from the hint bar and ignored when no Makefile
-exists. Selecting a target closes the palette, opens a small floating
-"running" box, and runs `make <target>` from the project root with
-stdout/stderr piped into the hamr tab line-prefixed `[make:<target>] `.
-Only one target runs at a time. While running, every key is suppressed
-except `q` (sends `SIGINT` to the make process) and `Ctrl+C` (cancels
-the run and quits the TUI so children aren't orphaned). On exit the box
-switches to a `Done ✓` / `Failed ✗ (exit N)` summary that stays until
-the user dismisses it with any key. The earlier dedicated `d` docker
+`:` opens a command palette: hamr commands (`rebuild`, `restart`, `open browser`, `clear logs`,
+`toggle mcp`, `toggle tunnel`, `stripe mode`, `help`, `quit`; each row shows
+its hotkey on the right; `toggle mcp` only when the gateway is known,
+`toggle tunnel` only when the dev proxy is up, `stripe mode` only with
+`[dev.stripe]`) followed by
+`make:<target>` for every target in the project-root `./Makefile` (parsed
+lazily on press, declaration order on empty query, ranked by
+`sahilm/fuzzy` as the user types, so `db-see` finds `make:db-seed`). `m`
+opens the same palette pre-filtered with `make:`; backspace widens it. `m`
+is ignored when no Makefile exists. Selecting a target closes the palette and asks the dev server to
+run `make <target>` from the
+project root via `DevActions.RunMake` — the TUI never spawns make
+itself, so the output fans out through the ProcessManager to the hamr
+tab line-prefixed `[make:<target>] `, the browser log overlay, and the
+shared log buffer MCP `logs.read` serves (rule `make:<target>`,
+terminated by a `[make:<target>] exited <n>` marker). The status indicator
+shows a spinner and `make <target>` for the duration, whoever started it.
+Nothing is modal: the TUI stays fully usable while the target runs, and
+the run is reported entirely by the status indicator plus the streaming
+output — the `[make:<target>] exited <n>` marker is the result. There is
+no cancel key; `Ctrl+C` quits the TUI, which cancels the runner context
+the run hangs off and kills its process group. The earlier dedicated `d` docker
 wipe hotkey was removed in favour of letting projects define their own
 `docker-wipe`, `migrate`, etc. Makefile targets and chain whatever
 recovery they need — the browser dev panel's `/__hamr/docker/{name}/wipe`
@@ -2872,34 +3996,84 @@ Long log lines soft-wrap to the viewport width (CSI escapes are passed through a
 
 Mouse-click selection: a left-press inside the viewport selects the whole logical line (reverse-video, including every wrap row of the same line). Holding the button and dragging extends the selection — and dragging past the top or bottom viewport edge auto-scrolls (one line per ~50 ms via tea.Tick) so the user can pick a range larger than the viewport. The auto-scroll loop stops once the cursor moves back inside or the viewport hits its scroll limit. Shift+click extends from the existing anchor; Ctrl+click toggles one line and disables drag-extend (ctrl is a single-line gesture, not a range). Selection is **global, not per-tab** — switching tabs drops it because the stored buffer indices wouldn't translate to the destination tab's buffer. While at least one line is selected, the bottom hint bar swaps to `[N selected]   y copy   esc clear` and log auto-scroll is paused so the picked lines aren't yanked off-screen by incoming output. `y` joins the selected lines (in original buffer order), strips ANSI escapes, and writes the result to the system clipboard via `atotto/clipboard` (`xclip`/`xsel`/`wl-copy` on Linux, `pbcopy` on macOS, `clip.exe` on Windows). On clipboard error the failure is appended as a `[hamr:tui] clipboard: <err>` line on the hamr tab so the user can see why instead of getting silence; otherwise the selection clears post-copy. The bounded log buffer eviction shifts selection indices in lockstep, dropping anything that scrolls off the start.
 
-### hamr add skill
+### hamr add service
 
-> Install an AI agent skill describing the HAMR framework.
+> Add a new Go binary (service) to an existing HAMR project.
 
-Writes a self-contained skill directory the target AI coding tool can load. The skill covers the `hamr` CLI, the `github.com/FyrmForge/hamr/pkg/*` packages, and HAMR's Go + templ + HTMX coding practices (plus Alpine.js guidance when the project opted in via `hamr new --alpine`). The skill is rendered per project: project installs read `hamr.toml` to decide which sections to include; `--global` installs default Alpine off.
+Creates `cmd/<name>/` (main.go + Dockerfile) and `internal/<name>/`, appends a
+`[[dev.watch]]` rule to `hamr.toml` so `hamr dev` builds and runs the binary
+alongside the site, and — for HTTP types — appends a `<NAME>_PORT` entry to
+`.env` and `.env.example`. Must be run from a HAMR project root. Any option not
+provided as a flag is asked interactively, mirroring `hamr new`.
 
 ```text
-hamr add skill <target> [flags]
+hamr add service [name] [flags]
 ```
 
-Currently supported targets: `claude`. Additional targets (`codex`, `opencode`, etc.) will follow.
+Service types:
+- `worker` — background worker: signal handling, graceful shutdown, ticker loop stub, optional DB.
+- `api` — JSON API server: `pkg/server` on its own port, `/api/health` route, optional DB and session auth.
+- `html` — HTML web server: `pkg/server` + templ on its own port, reuses the project's `internal/web/components` layout, optional DB/auth/locale.
+- `empty` — bare binary: env/logging bootstrap and a `Run()` stub in `internal/<name>/`.
 
 Flags:
-- `--global` — install to `~/.<target>/skills/hamr/` instead of `./.<target>/skills/hamr/` (default: `false`)
-- `--force` — overwrite an existing skill directory (default: `false`)
-
-Destination resolution:
-- Default: `./.claude/skills/hamr/`, and the command **must** be run from a HAMR project root (directory containing `hamr.toml`).
-- `--global`: `~/.claude/skills/hamr/`, runnable from any directory.
+- `--type` — service type: `empty`, `worker`, `api`, or `html` (prompted if omitted)
+- `--db` — wire the project's repo store; the database and connector come from `hamr.toml [options]` so the wiring matches the site
+- `--auth` — wire session auth middleware against the shared store (`api`/`html` only; requires `--db` and a project scaffolded with session auth). The site keeps owning login; the service only validates sessions.
+- `--locale` — load the project's locale bundle + middleware (`html` only; requires a project scaffolded with locale)
+- `--port` — listen port for `api`/`html` (default `8081`), read from `<NAME>_PORT` (name upper-snake-cased: `billing-svc` → `BILLING_SVC_PORT`)
+- `--skip-version-check` — bypass the `--auth` guard below
 
 Examples:
 ```bash
-hamr add skill claude
-hamr add skill claude --global
-hamr add skill claude --force
+hamr add service                                   # fully interactive
+hamr add service mailer --type worker --db
+hamr add service billing --type api --db --auth --port 8081
+hamr add service admin --type html --db --auth=false --port 8082
 ```
 
-The installed skill is a directory with `SKILL.md` plus three progressive-disclosure references under `references/` (CLI, packages, practices). The AI tool loads `SKILL.md` by default and pulls in a reference only when relevant to the current task.
+Behavior notes:
+- HTTP services are **not** behind the `hamr dev` proxy (`:3000` targets the site only) — hit them directly at `http://localhost:<port>`. Live-reload injection and browser console capture apply to the proxied site; the appended watch rule still rebuilds and restarts the service on file changes.
+- The service name becomes the binary (`bin/<name>`), the watch-rule name, and the env prefix. Names colliding with an existing `cmd/`/`internal/` directory or a `[[dev.watch]]`/`[[dev.daemon]]` name are rejected.
+- Migrations stay owned by the site / `cmd/migrate`; services connect to the schema as-is.
+- `--auth` (released builds only) refuses when the CLI is newer than the project's `[hamr] version`: the generated `SubjectLoader` calls `deps.Store.Users().GetByID`, and `internal/repo` is project-owned code that does not upgrade with the CLI. Migrate it by hand (`hamr ai upgrade` shows the diff), then `hamr ai upgrade --applied`, or pass `--skip-version-check`. An explicit `--auth` fails before the wizard prompts.
+- The `html` type's home page renders through the project's shared `components.Layout`, so it picks up the project CSS and static asset pipeline.
+
+### hamr add skill
+
+> Install AI agent skills for working on a HAMR project.
+
+Three skills are available, each a self-contained directory the target AI coding tool can load:
+- `hamr` — the framework skill: the `hamr` CLI, the `github.com/FyrmForge/hamr/pkg/*` packages, and HAMR's Go + templ + HTMX coding practices (plus Alpine.js guidance when the project opted in via `hamr new --alpine`). Rendered per project: project installs read `hamr.toml` to decide which sections to include; `--global` installs default Alpine off. Contains `SKILL.md` plus three progressive-disclosure references under `references/` (CLI, packages, practices).
+- `qa-loop` — an iterative QA test-and-fix loop: drives the app with Playwright MCP across device profiles, checks functional + UI/UX watch-lists, scores each round on a 1–10 scorecard, fixes findings root-cause-first, and loops (3 rounds default). All server-side actions go through hamr MCP (`dev.info`, `logs.read`, `make.run`, `mail.*`, `sms.*`, `stripe.*`).
+- `pr-publish` — creates or refreshes a GitHub PR with a short structured body, gist-hosted screenshots (uploaded via the gist's git remote — the gist API is text-only), and a stepped flow GIF captured live at 1440×900.
+
+```text
+hamr add skill [target] [flags]
+```
+
+With no arguments, an interactive picker asks which agents and which skills to install; detected agents and already-installed skills start ticked (an explicit `--skills` seeds the selection instead) and selected skills overwrite existing installs. Requires a HAMR project root (or `--global`) — checked before the picker opens. With a target argument it runs non-interactively.
+
+Supported targets: `claude`, `codex`, `opencode`. The SKILL.md format is a cross-tool standard, so every target gets identical content — only the destination differs. opencode natively reads `.claude/skills/` too, so a claude install already covers opencode.
+
+Flags:
+- `--skills` — comma-separated list of skills to install (default: all of `hamr,qa-loop,pr-publish`)
+- `--global` — install under the home directory instead of the project (default: `false`)
+- `--force` — overwrite existing skill directories in non-interactive mode (default: `false`)
+
+Destination resolution:
+- `claude`: `./.claude/skills/<dir>/` (global: `~/.claude/skills/<dir>/`).
+- `codex` / `opencode`: the shared `./.agents/skills/<dir>/` (global: `~/.agents/skills/<dir>/`); selecting both targets writes once.
+- Project installs **must** run from a HAMR project root (directory containing `hamr.toml`); `--global` runs from anywhere.
+- Directory names: `hamr` installs as `hamr/`; the workflow skills are prefixed — `hamr-qa-loop/`, `hamr-pr-publish/`.
+
+Examples:
+```bash
+hamr add skill                        # interactive picker
+hamr add skill claude                 # all skills, non-interactive
+hamr add skill codex --skills qa-loop # one skill → .agents/skills/
+hamr add skill claude --global --force
+```
 
 ### hamr ai capture
 
