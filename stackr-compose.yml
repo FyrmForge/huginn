@@ -1,0 +1,52 @@
+version: 1
+stack: huginn
+
+environments:
+  # A push to master builds the image and makes a release.
+  # auto: false = it deploys when you promote it.
+  prod:
+    branch: master
+    auto: false
+
+params:
+  huginn:
+    prod:
+      # The plain secret of the "huginn" client in Authelia (Authelia holds its hash).
+      oidc_client_secret:
+        type: secret
+
+volumes:
+  uploads: {}
+
+base:
+  tiles:
+    # Huginn's database on the shared Postgres (was its own postgres:18).
+    huginn-db:
+      type: slice
+      provision_from: infra:prod:pg
+
+    huginn:
+      # Built from this repo at the pushed commit.
+      build:
+        context: .
+        dockerfile: cmd/site/Dockerfile
+      port: 8080
+      health_path: /api/health
+      env:
+        BASE_URL: https://huginn.vulpe.dev
+        DATABASE_URL: ${{ tile.huginn-db.url }}
+        STORAGE_PATH: /uploads
+        # Whose X-Forwarded-For is believed. Carried over from the old stack;
+        # check it against the address the stackr proxy arrives from.
+        TRUSTED_PROXIES: 172.16.0.0/12
+        # Sign-in through Authelia. No login in front of the address:
+        # CalDAV clients send their own Basic Auth.
+        OIDC_ISSUER: https://auth.vulpe.dev
+        OIDC_CLIENT_ID: huginn
+        OIDC_CLIENT_SECRET: ${{ params.huginn.oidc_client_secret }}
+        OIDC_ADMIN_CLAIM: groups
+        OIDC_ADMIN_VALUE: admin
+      volumes:
+        - uploads:/uploads
+      domains:
+        - host: huginn.vulpe.dev
