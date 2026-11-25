@@ -31,7 +31,9 @@ base:
         context: .
         dockerfile: cmd/site/Dockerfile
       port: 8080
-      health_path: /api/health
+      health:
+        http:
+          path: /api/health
       env:
         BASE_URL: https://huginn.vulpe.dev
         DATABASE_URL: ${{ tile.huginn-db.url }}
