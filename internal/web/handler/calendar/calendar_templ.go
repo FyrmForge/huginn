@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -164,7 +165,7 @@ func calendarSidebar(c echo.Context, calendars []*repo.Calendar) templ.Component
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(cal.ID).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 62, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 63, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -177,7 +178,7 @@ func calendarSidebar(c echo.Context, calendars []*repo.Calendar) templ.Component
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("background-color: " + cal.Color)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 67, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 68, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -190,7 +191,7 @@ func calendarSidebar(c echo.Context, calendars []*repo.Calendar) templ.Component
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(cal.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 69, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 70, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -251,7 +252,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(prevMonthURL(year, month))).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 89, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 90, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
@@ -264,7 +265,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templruntime.NewAttributeExpression(prevMonthURL(year, month)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 90, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 91, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 		if templ_7745c5c3_Err != nil {
@@ -277,7 +278,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(month.String())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 96, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 97, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -290,7 +291,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(year))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 96, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 97, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -303,7 +304,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("%04d-%02d", year, int(month))).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 100, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 101, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 		if templ_7745c5c3_Err != nil {
@@ -316,7 +317,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(nextMonthURL(year, month))).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 111, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 112, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 		if templ_7745c5c3_Err != nil {
@@ -329,7 +330,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.NewAttributeExpression(nextMonthURL(year, month)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 112, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 113, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 		if templ_7745c5c3_Err != nil {
@@ -395,7 +396,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(wd)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 141, Col: 9}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 142, Col: 9}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -423,7 +424,7 @@ func monthGrid(weeks []MonthWeek, year int, month time.Month, cals map[string]*r
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("/calendar/grid?year=%d&month=%d", year, int(month))).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 156, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 157, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -534,7 +535,7 @@ func monthDayCol(day MonthDay, lanes int, cals map[string]*repo.Calendar) templ.
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("/events/new?date=%s", day.Date.Format("2006-01-02"))).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 187, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 188, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 			if templ_7745c5c3_Err != nil {
@@ -547,7 +548,7 @@ func monthDayCol(day MonthDay, lanes int, cals map[string]*repo.Calendar) templ.
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templruntime.NewAttributeExpression(day.Date.Format("2006-01-02")).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 190, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 191, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -619,7 +620,7 @@ func monthDayCol(day MonthDay, lanes int, cals map[string]*repo.Calendar) templ.
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(day.Date.Day()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 201, Col: 31}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 202, Col: 31}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -637,7 +638,7 @@ func monthDayCol(day MonthDay, lanes int, cals map[string]*repo.Calendar) templ.
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("height:%dpx", lanes*22))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 204, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 205, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -696,7 +697,7 @@ func spanBar(bar SpanBar, topBase int, cals map[string]*repo.Calendar) templ.Com
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templruntime.NewAttributeExpression(bar.Occ.CalendarID()).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 219, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 220, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -717,7 +718,7 @@ func spanBar(bar SpanBar, topBase int, cals map[string]*repo.Calendar) templ.Com
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(spanBarStyle(bar, topBase))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 222, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 223, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -730,7 +731,7 @@ func spanBar(bar SpanBar, topBase int, cals map[string]*repo.Calendar) templ.Com
 			var templ_7745c5c3_Var34 string
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templruntime.NewAttributeExpression(occurrenceEditURL(bar.Occ)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 223, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 224, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 			if templ_7745c5c3_Err != nil {
@@ -757,7 +758,7 @@ func spanBar(bar SpanBar, topBase int, cals map[string]*repo.Calendar) templ.Com
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(bar.Occ.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 227, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 228, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -799,7 +800,7 @@ func occurrenceChip(o service.Occurrence, cals map[string]*repo.Calendar) templ.
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templruntime.NewAttributeExpression(o.CalendarID()).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 233, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 234, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
@@ -820,7 +821,7 @@ func occurrenceChip(o service.Occurrence, cals map[string]*repo.Calendar) templ.
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(occurrenceEditURL(o)).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 235, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 236, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 			if templ_7745c5c3_Err != nil {
@@ -847,7 +848,7 @@ func occurrenceChip(o service.Occurrence, cals map[string]*repo.Calendar) templ.
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(o.Title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 239, Col: 11}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 240, Col: 11}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -952,7 +953,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(prevWeekURL(weekStart))).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 262, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 263, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 		if templ_7745c5c3_Err != nil {
@@ -965,7 +966,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templruntime.NewAttributeExpression(prevWeekURL(weekStart)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 263, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 264, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 		if templ_7745c5c3_Err != nil {
@@ -978,7 +979,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(weekStart.Format("Jan 2"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 269, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 270, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
@@ -991,7 +992,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(weekStart.AddDate(0, 0, 6).Format("Jan 2, 2006"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 269, Col: 178}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 270, Col: 178}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
@@ -1004,7 +1005,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templruntime.NewAttributeExpression(weekStart.Format("2006-01-02")).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 273, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 274, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 		if templ_7745c5c3_Err != nil {
@@ -1017,7 +1018,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(nextWeekURL(weekStart))).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 284, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 285, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
@@ -1030,7 +1031,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templruntime.NewAttributeExpression(nextWeekURL(weekStart)).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 285, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 286, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 		if templ_7745c5c3_Err != nil {
@@ -1096,7 +1097,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 			var templ_7745c5c3_Var52 string
 			templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(day.Date.Format("Mon"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 313, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 314, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 			if templ_7745c5c3_Err != nil {
@@ -1151,7 +1152,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 			var templ_7745c5c3_Var55 string
 			templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(day.Date.Day()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 317, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 318, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 			if templ_7745c5c3_Err != nil {
@@ -1174,7 +1175,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("height:%dpx", week.Lanes*22+4))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 327, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 328, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1257,7 +1258,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 				var templ_7745c5c3_Var59 string
 				templ_7745c5c3_Var59, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("position: absolute; top: calc(var(--ppm,1) * %dpx); right: 6px;", hr*60))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 350, Col: 100}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 351, Col: 100}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 				if templ_7745c5c3_Err != nil {
@@ -1270,7 +1271,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 				var templ_7745c5c3_Var60 string
 				templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%02d:00", hr))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 352, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 353, Col: 35}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 				if templ_7745c5c3_Err != nil {
@@ -1338,7 +1339,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 				var templ_7745c5c3_Var63 string
 				templ_7745c5c3_Var63, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("position: absolute; top: calc(var(--ppm,1) * %dpx); left: 0; right: 0;", hr*60))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 368, Col: 107}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 369, Col: 107}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 				if templ_7745c5c3_Err != nil {
@@ -1361,7 +1362,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templruntime.NewAttributeExpression(we.Occ.CalendarID()).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 374, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 375, Col: 43}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 					if templ_7745c5c3_Err != nil {
@@ -1382,7 +1383,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 					var templ_7745c5c3_Var65 string
 					templ_7745c5c3_Var65, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("position: absolute; top: calc(var(--ppm,1) * %dpx); height: calc(var(--ppm,1) * %dpx); left: 2px; right: 2px;", we.TopPx, we.HeightPx))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 376, Col: 162}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 377, Col: 162}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 					if templ_7745c5c3_Err != nil {
@@ -1395,7 +1396,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 					var templ_7745c5c3_Var66 string
 					templ_7745c5c3_Var66, templ_7745c5c3_Err = templruntime.NewAttributeExpression(occurrenceEditURL(we.Occ)).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 378, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 379, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 					if templ_7745c5c3_Err != nil {
@@ -1422,7 +1423,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 				var templ_7745c5c3_Var67 string
 				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(we.Occ.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 382, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 383, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 				if templ_7745c5c3_Err != nil {
@@ -1445,7 +1446,7 @@ func weekGrid(week WeekData, weekStart time.Time, cals map[string]*repo.Calendar
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("/week/grid?week=%s", weekStart.Format("2006-01-02"))).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 396, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/handler/calendar/calendar.templ`, Line: 397, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 		if templ_7745c5c3_Err != nil {
@@ -1550,10 +1551,23 @@ func evCardAttrs(o service.Occurrence, cals map[string]*repo.Calendar) templ.Att
 	return a
 }
 
+var (
+	safeCSSColor = regexp.MustCompile(`^#[0-9a-fA-F]{3,8}$`)
+	safeCSSID    = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+)
+
+// calendarColorCSS is emitted raw inside <style>, so color and ID must be
+// whitelisted: both can come from CalDAV/push clients, not just the web form.
 func calendarColorCSS(calendars []*repo.Calendar) string {
 	var sb strings.Builder
 	for _, cal := range calendars {
+		if !safeCSSID.MatchString(cal.ID) {
+			continue
+		}
 		c := cal.Color
+		if !safeCSSColor.MatchString(c) {
+			c = "#888888"
+		}
 		fmt.Fprintf(&sb, `[data-event-cal="%s"]{background-color:%s26;color:%s;border-left:2px solid %s}`, cal.ID, c, c, c)
 		fmt.Fprintf(&sb, `[data-event-cal="%s"]:hover{background-color:%s40}`, cal.ID, c)
 	}

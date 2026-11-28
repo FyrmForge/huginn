@@ -155,6 +155,9 @@ func (h *Handler) PropfindEvent(c echo.Context) error {
 		return c.NoContent(http.StatusForbidden)
 	}
 	calID := c.Param("calID")
+	if _, err := h.calendarService.GetByID(c.Request().Context(), user.ID, calID); err != nil {
+		return c.NoContent(http.StatusNotFound)
+	}
 	eventID := strings.TrimSuffix(c.Param("eventUID"), ".ics")
 	event, err := h.eventService.GetByID(c.Request().Context(), eventID)
 	if err != nil || event == nil || event.CalendarID != calID {
@@ -206,6 +209,9 @@ func (h *Handler) PutEvent(c echo.Context) error {
 	cal, err := h.calendarService.GetByID(c.Request().Context(), user.ID, calID)
 	if err != nil || cal == nil {
 		return c.NoContent(http.StatusNotFound)
+	}
+	if !h.calendarService.CanEdit(c.Request().Context(), user.ID, calID) {
+		return c.NoContent(http.StatusForbidden)
 	}
 
 	body, err := io.ReadAll(c.Request().Body)
@@ -341,7 +347,7 @@ func (h *Handler) DeleteEvent(c echo.Context) error {
 		return c.NoContent(http.StatusForbidden)
 	}
 	calID := c.Param("calID")
-	if _, err := h.calendarService.GetByID(c.Request().Context(), user.ID, calID); err != nil {
+	if !h.calendarService.CanEdit(c.Request().Context(), user.ID, calID) {
 		return c.NoContent(http.StatusForbidden)
 	}
 	eventID := strings.TrimSuffix(c.Param("eventUID"), ".ics")

@@ -190,6 +190,13 @@ func (s *CalendarService) GetUserRole(ctx context.Context, calendarID, userID st
 	return m.Role, nil
 }
 
+// CanEdit reports whether userID may add, change or delete events in calendarID
+// (owner or editor).
+func (s *CalendarService) CanEdit(ctx context.Context, userID, calendarID string) bool {
+	role, err := s.GetUserRole(ctx, calendarID, userID)
+	return err == nil && (role == "owner" || role == "editor")
+}
+
 // ListMembersWithUsers returns members of a calendar with user info.
 // Only accessible to owners.
 func (s *CalendarService) ListMembersWithUsers(ctx context.Context, calendarID, ownerID string) ([]*repo.CalendarMemberInfo, error) {

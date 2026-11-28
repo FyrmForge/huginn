@@ -53,8 +53,7 @@ func (h *handler) userLoc(c echo.Context, userID string) *time.Location {
 
 // canEditCalendar returns true if userID has owner or editor access to calendarID.
 func (h *handler) canEditCalendar(c echo.Context, calendarID, userID string) bool {
-	role, err := h.calendarService.GetUserRole(c.Request().Context(), calendarID, userID)
-	return err == nil && (role == "owner" || role == "editor")
+	return h.calendarService.CanEdit(c.Request().Context(), userID, calendarID)
 }
 
 // GET /events/new?date=YYYY-MM-DD
@@ -162,8 +161,10 @@ func (h *handler) Edit(c echo.Context) error {
 		}
 		loc := h.userLoc(c, user.ID)
 		dtFmt := "02 Jan 2006, 15:04"
+		endAt := e.EndAt
 		if e.AllDay {
 			dtFmt = "02 Jan 2006"
+			endAt = allDayFormEnd(e.StartAt, e.EndAt)
 		}
 		calName := ""
 		if cal, err := h.calendarService.GetByID(c.Request().Context(), user.ID, e.CalendarID); err == nil && cal != nil {
@@ -176,7 +177,7 @@ func (h *handler) Edit(c echo.Context) error {
 		return respond.HTML(c, http.StatusOK, eventReadOnlyModal(
 			e.Title, calName,
 			e.StartAt.In(loc).Format(dtFmt),
-			e.EndAt.In(loc).Format(dtFmt),
+			endAt.In(loc).Format(dtFmt),
 			e.Description, e.Location, createdBy,
 		))
 	}
@@ -208,6 +209,7 @@ func (h *handler) Edit(c echo.Context) error {
 		dtFmt := "2006-01-02T15:04"
 		if allDay {
 			dtFmt = "2006-01-02"
+			end = allDayFormEnd(start, end)
 		}
 		f := EventForm{
 			Title:       title,
@@ -370,7 +372,7 @@ func eventToForm(e *repo.Event, loc *time.Location) EventForm {
 	}
 	if e.AllDay {
 		f.StartAt = e.StartAt.In(loc).Format("2006-01-02")
-		f.EndAt = e.EndAt.In(loc).Format("2006-01-02")
+		f.EndAt = allDayFormEnd(e.StartAt, e.EndAt).In(loc).Format("2006-01-02")
 	} else {
 		f.StartAt = e.StartAt.In(loc).Format("2006-01-02T15:04")
 		f.EndAt = e.EndAt.In(loc).Format("2006-01-02T15:04")
@@ -441,6 +443,15 @@ type EventForm struct {
 	RecurCount    int    `form:"recur_count"`
 }
 
+// allDayFormEnd turns a stored (exclusive) all-day end into the inclusive last
+// day shown in the form, never before start (older events stored start == end).
+func allDayFormEnd(start, end time.Time) time.Time {
+	if e := end.AddDate(0, 0, -1); e.After(start) {
+		return e
+	}
+	return start
+}
+
 func parseEventTime(val string, allDay bool, loc *time.Location) (time.Time, error) {
 	if allDay {
 		t, err := time.Parse("2006-01-02", val)
@@ -457,6 +468,9 @@ func (f EventForm) toInput(loc *time.Location) (service.EventInput, error) {
 	end, err := parseEventTime(f.EndAt, f.AllDay, loc)
 	if err != nil {
 		return service.EventInput{}, err
+	}
+	if f.AllDay {
+		end = end.AddDate(0, 0, 1) // form end is inclusive, stored end is exclusive
 	}
 	return service.EventInput{
 		Title:       f.Title,

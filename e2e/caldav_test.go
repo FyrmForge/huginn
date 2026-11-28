@@ -567,6 +567,51 @@ func TestCalDAV_ForbiddenOnOtherUserCalendar(t *testing.T) {
 	}
 }
 
+func viewerEventPath(calID, eventID string) string {
+	return fmt.Sprintf("/dav/calendars/%s/%s/%s.ics", caldavUserID, calID, eventID)
+}
+
+func TestCalDAV_Viewer_CanRead(t *testing.T) {
+	resp := caldavDo(t, "GET", viewerEventPath("e2e-cal-shared-viewer", "e2e-event-viewer-001"), caldavUser, caldavToken, "")
+	body := readBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	mustContainStr(t, body, "Viewer Only")
+}
+
+func TestCalDAV_Viewer_PutForbidden(t *testing.T) {
+	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:e2e-event-viewer-001@huginn\r\n" +
+		"DTSTART:20260701T090000Z\r\nDTEND:20260701T100000Z\r\nSUMMARY:Hijacked\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	resp := caldavDo(t, "PUT", viewerEventPath("e2e-cal-shared-viewer", "e2e-event-viewer-001"), caldavUser, caldavToken, ics)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestCalDAV_Viewer_DeleteForbidden(t *testing.T) {
+	resp := caldavDo(t, "DELETE", viewerEventPath("e2e-cal-shared-viewer", "e2e-event-viewer-001"), caldavUser, caldavToken, "")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+	// Event must still be there.
+	get := caldavDo(t, "GET", viewerEventPath("e2e-cal-shared-viewer", "e2e-event-viewer-001"), caldavUser, caldavToken, "")
+	defer get.Body.Close()
+	if get.StatusCode != http.StatusOK {
+		t.Errorf("event gone after forbidden delete: GET %d", get.StatusCode)
+	}
+}
+
+func TestCalDAV_NonMember_PropfindEventNotFound(t *testing.T) {
+	resp := caldavDo(t, "PROPFIND", viewerEventPath("e2e-cal-private-admin", "e2e-event-private-001"), caldavUser, caldavToken, "")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", resp.StatusCode)
+	}
+}
+
 // --- helpers ---
 
 func extractTokenFromBody(body string) string {

@@ -28,3 +28,30 @@ VALUES
   ('e2e-event-001', 'e2e-cal-001', 'e2e-event-001@huginn', 'E2E Standup', 'Daily sync', '2026-06-29 10:00:00+00', '2026-06-29 10:30:00+00', 'UTC', 'confirmed', 'e2e-etag-001', 'native', 'e2e-user-001', 'e2e-user-001', NOW(), NOW()),
   ('e2e-event-002', 'e2e-cal-001', 'e2e-event-002@huginn', 'E2E Planning', 'Weekly planning', '2026-06-30 14:00:00+00', '2026-06-30 15:00:00+00', 'UTC', 'confirmed', 'e2e-etag-002', 'native', 'e2e-user-001', 'e2e-user-001', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- Admin-owned calendar shared with e2e-user-001 as viewer (CalDAV role checks).
+INSERT INTO calendars (id, owner_id, name, color, timezone, is_default, created_at, updated_at)
+VALUES ('e2e-cal-shared-viewer', 'e2e-admin-001', 'E2E Shared (viewer)', '#7dd181', 'UTC', false, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO calendar_members (calendar_id, user_id, role)
+VALUES ('e2e-cal-shared-viewer', 'e2e-admin-001', 'owner'),
+       ('e2e-cal-shared-viewer', 'e2e-user-001', 'viewer')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO events (id, calendar_id, uid, title, description, start_at, end_at, timezone, status, etag, ownership, created_by, updated_by, created_at, updated_at)
+VALUES ('e2e-event-viewer-001', 'e2e-cal-shared-viewer', 'e2e-event-viewer-001@huginn', 'Viewer Only', '', '2026-07-01 09:00:00+00', '2026-07-01 10:00:00+00', 'UTC', 'confirmed', 'e2e-etag-viewer-001', 'native', 'e2e-admin-001', 'e2e-admin-001', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- Admin-owned calendar NOT shared with e2e-user-001.
+INSERT INTO calendars (id, owner_id, name, color, timezone, is_default, created_at, updated_at)
+VALUES ('e2e-cal-private-admin', 'e2e-admin-001', 'E2E Admin Private', '#f5a623', 'UTC', false, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO calendar_members (calendar_id, user_id, role)
+VALUES ('e2e-cal-private-admin', 'e2e-admin-001', 'owner')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO events (id, calendar_id, uid, title, description, start_at, end_at, timezone, status, etag, ownership, created_by, updated_by, created_at, updated_at)
+VALUES ('e2e-event-private-001', 'e2e-cal-private-admin', 'e2e-event-private-001@huginn', 'Admin Private', '', '2026-07-02 09:00:00+00', '2026-07-02 10:00:00+00', 'UTC', 'confirmed', 'e2e-etag-private-001', 'native', 'e2e-admin-001', 'e2e-admin-001', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;

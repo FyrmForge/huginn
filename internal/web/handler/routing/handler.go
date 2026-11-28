@@ -49,6 +49,10 @@ func (h *handler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized)
 	}
 	in := formToInput(c)
+	if !h.calendar.CanEdit(c.Request().Context(), user.ID, in.TargetCalendarID) {
+		middleware.SetFlash(c, "Create failed: you can't add events to that calendar", middleware.FlashError)
+		return respond.Redirect(c, "/settings")
+	}
 	if _, err := h.routing.Create(c.Request().Context(), user.ID, in); err != nil {
 		middleware.SetFlash(c, "Create failed: "+err.Error(), middleware.FlashError)
 	} else {
@@ -85,6 +89,10 @@ func (h *handler) Update(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized)
 	}
 	in := formToInput(c)
+	if !h.calendar.CanEdit(c.Request().Context(), user.ID, in.TargetCalendarID) {
+		middleware.SetFlash(c, "Update failed: you can't add events to that calendar", middleware.FlashError)
+		return respond.Redirect(c, "/settings")
+	}
 	if err := h.routing.Update(c.Request().Context(), user.ID, c.Param("id"), in); err != nil {
 		middleware.SetFlash(c, "Update failed: "+err.Error(), middleware.FlashError)
 	} else {

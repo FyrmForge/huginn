@@ -2,6 +2,7 @@ package calendar
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -492,10 +493,23 @@ func evCardAttrs(o service.Occurrence, cals map[string]*repo.Calendar) templ.Att
 	return a
 }
 
+var (
+	safeCSSColor = regexp.MustCompile(`^#[0-9a-fA-F]{3,8}$`)
+	safeCSSID    = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+)
+
+// calendarColorCSS is emitted raw inside <style>, so color and ID must be
+// whitelisted: both can come from CalDAV/push clients, not just the web form.
 func calendarColorCSS(calendars []*repo.Calendar) string {
 	var sb strings.Builder
 	for _, cal := range calendars {
+		if !safeCSSID.MatchString(cal.ID) {
+			continue
+		}
 		c := cal.Color
+		if !safeCSSColor.MatchString(c) {
+			c = "#888888"
+		}
 		fmt.Fprintf(&sb, `[data-event-cal="%s"]{background-color:%s26;color:%s;border-left:2px solid %s}`, cal.ID, c, c, c)
 		fmt.Fprintf(&sb, `[data-event-cal="%s"]:hover{background-color:%s40}`, cal.ID, c)
 	}

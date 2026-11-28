@@ -212,6 +212,9 @@ func ExpandOccurrences(e *repo.Event, exceptions []*repo.EventException, from, t
 	}
 
 	loc := loadLocation(e.Timezone)
+	if e.AllDay {
+		loc = time.UTC // all-day dates are UTC midnights; expanding in a DST zone shifts them off midnight
+	}
 	duration := e.EndAt.Sub(e.StartAt)
 
 	rset, err := buildRSet(e, loc)

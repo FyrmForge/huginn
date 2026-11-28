@@ -137,7 +137,7 @@ func (s *SyncService) Sync(ctx context.Context, userID, connectionID string) err
 			created, _ := s.event.Create(muteCtx, userID, huginnCal.ID, in)
 			if created != nil {
 				affected[huginnCal.ID] = true
-				if targetCalID, rerr := s.routing.Route(ctx, userID, created); rerr == nil && targetCalID != "" && targetCalID != huginnCal.ID {
+				if targetCalID, rerr := s.routing.Route(ctx, userID, created); rerr == nil && targetCalID != "" && targetCalID != huginnCal.ID && s.calendar.CanEdit(ctx, userID, targetCalID) {
 					in.Ownership = "imported_readonly"
 					_, _ = s.event.Create(muteCtx, userID, targetCalID, in)
 					_ = s.event.Delete(muteCtx, userID, created.ID)

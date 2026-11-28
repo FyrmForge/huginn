@@ -293,10 +293,11 @@ func packLanes(bars []SpanBar) int {
 }
 
 // occDayRange returns the inclusive [startDay, endDay] (UTC, day-truncated) an
-// occurrence covers.
+// occurrence covers. End is exclusive (RFC 5545), so an event ending at 00:00
+// (all-day events always do) does not cover that day.
 func occDayRange(o service.Occurrence) (time.Time, time.Time) {
 	s := o.Start.UTC().Truncate(24 * time.Hour)
-	e := o.End.UTC().Truncate(24 * time.Hour)
+	e := o.End.UTC().Add(-time.Nanosecond).Truncate(24 * time.Hour)
 	if e.Before(s) {
 		e = s
 	}
@@ -401,7 +402,11 @@ func buildWeekGrid(weekStart time.Time, occs []service.Occurrence) WeekData {
 		start := o.Start.UTC()
 		end := o.End.UTC()
 		topPx := start.Hour()*60 + start.Minute()
-		durPx := (end.Hour()*60 + end.Minute()) - topPx
+		endMin := end.Hour()*60 + end.Minute()
+		if end.Truncate(24 * time.Hour).After(startDay) {
+			endMin = 24 * 60 // ends at 00:00 next day: run to the bottom of the column
+		}
+		durPx := endMin - topPx
 		if durPx < 20 {
 			durPx = 20
 		}

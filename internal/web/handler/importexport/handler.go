@@ -50,6 +50,10 @@ func (h *handler) Import(c echo.Context) error {
 		return respond.HTML(c, http.StatusUnprocessableEntity, importPage(c, cals, "Select a calendar"))
 	}
 
+	if !h.calendarService.CanEdit(c.Request().Context(), user.ID, calendarID) {
+		return echo.NewHTTPError(http.StatusForbidden)
+	}
+
 	file, err := c.FormFile("ics_file")
 	if err != nil {
 		cals, _ := h.calendarService.ListForUser(c.Request().Context(), user.ID)
@@ -86,6 +90,10 @@ func (h *handler) Export(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError)
 		}
 		return respond.HTML(c, http.StatusOK, exportPage(c, cals))
+	}
+
+	if _, err := h.calendarService.GetByID(c.Request().Context(), user.ID, calendarID); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound)
 	}
 
 	c.Response().Header().Set("Content-Type", "text/calendar; charset=utf-8")
